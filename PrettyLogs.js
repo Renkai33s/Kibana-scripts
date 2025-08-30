@@ -1,6 +1,6 @@
 (function(){
 
-  // --- Глобальная система уведомлений с анимацией без подпрыгивания ---
+  // --- Глобальная система уведомлений с анимацией ---
   if (!window.__notifContainer) {
       const container = document.createElement("div");
       container.id = "notif-container";
@@ -8,7 +8,6 @@
       container.style.bottom = "20px";
       container.style.right = "20px";
       container.style.width = "auto";
-      container.style.height = "auto";
       container.style.zIndex = 999999;
       document.body.appendChild(container);
       window.__notifContainer = container;
@@ -24,9 +23,6 @@
 
       const div = document.createElement("div");
       div.textContent = msg;
-      div.style.position = 'absolute';
-      div.style.top = '0';
-      div.style.right = '0';
       div.style.padding = "10px 15px";
       div.style.borderRadius = "8px";
       div.style.background = isError ? "#ff4d4f" : isSuccess ? "#52c41a" : "#3498db";
@@ -42,9 +38,7 @@
       window.__notifContainer.appendChild(div);
       window.__currentNotif = div;
 
-      requestAnimationFrame(() => {
-          div.style.opacity = '1';
-      });
+      requestAnimationFrame(() => div.style.opacity = '1');
 
       setTimeout(() => {
           if (window.__currentNotif === div) {
