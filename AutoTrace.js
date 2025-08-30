@@ -1,6 +1,6 @@
 (function(){
 
-  // --- Универсальный контейнер уведомлений ---
+  // --- Контейнер для уведомлений ---
   let notifContainer = document.getElementById("notif-container");
   if (!notifContainer) {
     notifContainer = document.createElement("div");
@@ -8,24 +8,15 @@
     notifContainer.style.position = "fixed";
     notifContainer.style.bottom = "20px";
     notifContainer.style.right = "20px";
-    notifContainer.style.width = "300px";
+    notifContainer.style.display = "flex";
+    notifContainer.style.flexDirection = "column";
+    notifContainer.style.gap = "10px";
     notifContainer.style.zIndex = 999999;
     document.body.appendChild(notifContainer);
   }
 
-  const notifications = [];
-  const gap = 10;
-
-  function updatePositions() {
-    let currentBottom = 0;
-    for (let i = notifications.length - 1; i >= 0; i--) {
-      const notif = notifications[i];
-      notif.style.bottom = currentBottom + 'px';
-      currentBottom += notif.offsetHeight + gap;
-    }
-  }
-
-  function showMessage(msg, isError=false, isSuccess=false, duration=2000){
+  // --- Анимированное сообщение ---
+  function showMessage(msg, isError = false, isSuccess = false) {
     const div = document.createElement("div");
     div.textContent = msg;
     div.style.padding = "10px 15px";
@@ -34,40 +25,26 @@
     div.style.color = "white";
     div.style.fontFamily = "sans-serif";
     div.style.fontSize = "14px";
-    div.style.width = "300px";
-    div.style.position = "absolute";
-    div.style.right = "0px";
     div.style.opacity = "0";
     div.style.transform = "translateY(20px)";
     div.style.transition = "all 0.3s ease";
 
     notifContainer.appendChild(div);
-    notifications.push(div);
-    updatePositions();
 
     requestAnimationFrame(() => {
-      requestAnimationFrame(() => {
-        div.style.opacity = "1";
-        div.style.transform = "translateY(0)";
-      });
+      div.style.opacity = "1";
+      div.style.transform = "translateY(0)";
     });
 
     setTimeout(() => {
       div.style.opacity = "0";
       div.style.transform = "translateY(20px)";
-      setTimeout(() => {
-        notifContainer.removeChild(div);
-        const idx = notifications.indexOf(div);
-        if (idx !== -1) notifications.splice(idx,1);
-        updatePositions();
-      }, 300);
-    }, duration);
+      setTimeout(() => div.remove(), 300);
+    }, 2000);
   }
+  function showError(msg){ showMessage(msg, true, false); }
+  function showSuccess(msg){ showMessage(msg, false, true); }
 
-  function showError(msg){ showMessage(msg,true,false); }
-  function showSuccess(msg){ showMessage(msg,false,true); }
-
-  // --- XPath shortcut ---
   function x(p){
     return document.evaluate(p,document,null,XPathResult.FIRST_ORDERED_NODE_TYPE,null).singleNodeValue;
   }
