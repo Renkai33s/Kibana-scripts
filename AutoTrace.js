@@ -1,6 +1,6 @@
 (function(){
 
-  // --- Глобальная система уведомлений с анимацией ---
+  // --- Глобальная система уведомлений с анимацией без подпрыгивания ---
   if (!window.__notifContainer) {
       const container = document.createElement("div");
       container.id = "notif-container";
@@ -8,6 +8,7 @@
       container.style.bottom = "20px";
       container.style.right = "20px";
       container.style.width = "auto";
+      container.style.height = "auto";
       container.style.zIndex = 999999;
       document.body.appendChild(container);
       window.__notifContainer = container;
@@ -18,11 +19,14 @@
       const oldNotif = window.__currentNotif;
       if (oldNotif) {
           oldNotif.style.opacity = '0';
-          oldNotif.style.transform = 'translateY(20px)';
           setTimeout(() => oldNotif.remove(), 300);
       }
+
       const div = document.createElement("div");
       div.textContent = msg;
+      div.style.position = 'absolute';  // фиксированная позиция
+      div.style.top = '0';
+      div.style.right = '0';
       div.style.padding = "10px 15px";
       div.style.borderRadius = "8px";
       div.style.background = isError ? "#ff4d4f" : isSuccess ? "#52c41a" : "#3498db";
@@ -33,18 +37,18 @@
       div.style.textAlign = "center";
       div.style.boxShadow = "0 2px 6px rgba(0,0,0,0.2)";
       div.style.opacity = '0';
-      div.style.transform = 'translateY(20px)';
-      div.style.transition = 'opacity 0.3s ease, transform 0.3s ease';
+      div.style.transition = 'opacity 0.3s ease';
+
       window.__notifContainer.appendChild(div);
       window.__currentNotif = div;
+
       requestAnimationFrame(() => {
           div.style.opacity = '1';
-          div.style.transform = 'translateY(0)';
       });
+
       setTimeout(() => {
           if (window.__currentNotif === div) {
               div.style.opacity = '0';
-              div.style.transform = 'translateY(20px)';
               setTimeout(() => {
                   if (window.__currentNotif === div) window.__currentNotif = null;
                   div.remove();
