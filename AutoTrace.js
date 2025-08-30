@@ -24,29 +24,29 @@
     div.style.color = "white";
     div.style.fontFamily = "sans-serif";
     div.style.fontSize = "14px";
+    div.style.overflow = "hidden";
+    div.style.maxHeight = "0";
     div.style.opacity = "0";
-    div.style.transform = "translateY(-20px)";
     div.style.transition = "all 0.3s ease";
 
     notifContainer.prepend(div);
 
     requestAnimationFrame(() => {
+      div.style.maxHeight = "100px";
       div.style.opacity = "1";
-      div.style.transform = "translateY(0)";
     });
 
     setTimeout(() => {
       div.style.opacity = "0";
-      div.style.transform = "translateY(-20px)";
+      div.style.maxHeight = "0";
       setTimeout(() => div.remove(), 300);
     }, 2000);
   }
 
-  function showError(msg) {
-    showMessage(msg, true, false);
-  }
+  function showError(msg) { showMessage(msg, true, false); }
+  function showSuccess(msg) { showMessage(msg, false, true); }
 
-  // --- UI: прогресс ---
+  // --- Прогресс ---
   function showProgress() {
     const wrap = document.createElement("div");
     wrap.style.padding = "6px 10px";
@@ -89,10 +89,7 @@
 
   // --- Основные элементы ---
   const s = x('/html/body/div[1]/div/div/div/div[2]/div/div/div/div/div[2]/div/div/div');
-  if (!s) {
-    showError("Элемент для скролла не найден");
-    return;
-  }
+  if (!s) { showError("Элемент для скролла не найден"); return; }
 
   const countXPath = '/html/body/div[1]/div/div/div/div[2]/div/div/div/div/div[2]/div/div/div/div[2]/div[1]/div[1]/div[1]/div[1]/div/div/div[1]/div/strong';
   const tXPath = '/html/body/div[1]/div/div/div/div[2]/div/div/div/div/div[2]/div/div/div/div[2]/div[2]/div/table';
@@ -103,45 +100,30 @@
   let cnt = cntEl ? parseInt(cntEl.textContent.trim(), 10) : 0;
 
   const table = x(tXPath);
-  if (!table) {
-    showError("Таблица не найдена");
-    return;
-  }
+  if (!table) { showError("Таблица не найдена"); return; }
   const headers = [...table.querySelectorAll("thead tr th")].map((th) => th.innerText.trim());
   const traceIdx = headers.indexOf("message.traceid");
-  if (traceIdx === -1) {
-    showError("Трейсы не найдены");
-    return;
-  }
+  if (traceIdx === -1) { showError("Трейсы не найдены"); return; }
 
-  let prog = null,
-    step = 0,
-    prevRows = 0,
-    unchanged = 0,
-    stopRequested = false,
-    timerID = null;
+  let prog = null, step = 0, prevRows = 0, unchanged = 0, timerID = null, stopRequested = false;
 
   function getRowCount() {
     try {
       const table = x(tXPath);
       if (!table) return 0;
       return table.querySelectorAll("tbody tr").length;
-    } catch {
-      showError("Ошибка при подсчёте строк");
-      return 0;
-    }
+    } catch { showError("Ошибка при подсчёте строк"); return 0; }
   }
 
   function runAfterScroll() {
     try {
       let ids = [];
-      table.querySelectorAll("tbody tr").forEach((tr) => {
+      table.querySelectorAll("tbody tr").forEach(tr => {
         const v = tr.children[traceIdx]?.innerText.trim();
         if (v && v !== "-") ids.push(v);
       });
-
       ids = [...new Set(ids)];
-      const txt = "(" + ids.map((v) => '"' + v + '"').join(" ") + ")";
+      const txt = "(" + ids.map(v => '"' + v + '"').join(" ") + ")";
 
       const ta = x(taXPath);
       if (ta) {
@@ -155,11 +137,9 @@
       if (b) b.click();
 
       if (prog) prog.remove();
-      showMessage("Трейсы подставлены", false, true);
+      showSuccess("Трейсы подставлены");
       s.scrollTop = 0;
-    } catch {
-      showError("Что-то пошло не так");
-    }
+    } catch { showError("Что-то пошло не так"); }
   }
 
   function scrollLoop() {
@@ -172,28 +152,14 @@
 
       timerID = setTimeout(() => {
         const rows = getRowCount();
-        if (rows > prevRows) {
-          prevRows = rows;
-          unchanged = 0;
-        } else {
-          unchanged++;
-        }
-
-        if (unchanged < 10 && !stopRequested) {
-          scrollLoop();
-        } else {
-          runAfterScroll();
-        }
+        if (rows > prevRows) { prevRows = rows; unchanged = 0; } else { unchanged++; }
+        if (unchanged < 10 && !stopRequested) { scrollLoop(); } else { runAfterScroll(); }
       }, 100);
-    } catch {
-      showError("Ошибка при скролле");
-      runAfterScroll();
-    }
+    } catch { showError("Ошибка при скролле"); runAfterScroll(); }
   }
 
-  if (isNaN(cnt) || cnt <= 50) {
-    runAfterScroll();
-  } else {
+  if (isNaN(cnt) || cnt <= 50) { runAfterScroll(); } 
+  else {
     prog = showProgress();
     prog.stopButton.onclick = () => {
       stopRequested = true;
@@ -203,4 +169,5 @@
     };
     scrollLoop();
   }
+
 })();
