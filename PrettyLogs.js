@@ -1,6 +1,6 @@
 (function(){
 
-  // --- Глобальная система уведомлений с анимацией ---
+  // --- Глобальная система уведомлений с плавной анимацией ---
   if (!window.__notifContainer) {
       const container = document.createElement("div");
       container.id = "notif-container";
@@ -38,7 +38,9 @@
       window.__notifContainer.appendChild(div);
       window.__currentNotif = div;
 
-      requestAnimationFrame(() => div.style.opacity = '1');
+      // Принудительно «отрисовать» начальное состояние
+      div.getBoundingClientRect();
+      div.style.opacity = '1';
 
       setTimeout(() => {
           if (window.__currentNotif === div) {
