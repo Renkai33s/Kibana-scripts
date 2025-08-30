@@ -1,6 +1,6 @@
 (function(){
 
-  // --- Контейнер для уведомлений (унифицированный с Скриптом 1) ---
+  // --- Контейнер для уведомлений (тот же что и в AutoTrace.js) ---
   let notifContainer = document.getElementById("notif-container");
   if (!notifContainer) {
     notifContainer = document.createElement("div");
@@ -8,12 +8,12 @@
     notifContainer.style.position = "fixed";
     notifContainer.style.bottom = "20px";
     notifContainer.style.right = "20px";
-    notifContainer.style.display = "flex";
-    notifContainer.style.flexDirection = "column";
-    notifContainer.style.gap = "10px";
+    notifContainer.style.width = "300px";
     notifContainer.style.zIndex = 999999;
     document.body.appendChild(notifContainer);
   }
+
+  let notifIndex = 0; // Индекс для позиционирования уведомлений
 
   // --- Анимированное сообщение ---
   function showMessage(msg, isError = false, isSuccess = false) {
@@ -26,24 +26,29 @@
     div.style.fontFamily = "sans-serif";
     div.style.fontSize = "14px";
     div.style.opacity = "0";
-    div.style.transform = "translateY(20px)";
+    div.style.position = "absolute";
+    div.style.right = "0px";
+    div.style.width = "300px";
+    const currentIndex = notifIndex;
+    div.style.bottom = `${20 + currentIndex * 60}px`; // фиксированное место
+    notifIndex++;
+
     div.style.transition = "all 0.3s ease";
 
     notifContainer.appendChild(div);
 
-    // плавное появление
     requestAnimationFrame(() => {
       div.style.opacity = "1";
       div.style.transform = "translateY(0)";
     });
 
-    // плавное скрытие
     setTimeout(() => {
       div.style.opacity = "0";
       div.style.transform = "translateY(20px)";
       setTimeout(() => div.remove(), 300);
     }, 2000);
   }
+
   function showError(msg){ showMessage(msg, true, false); }
   function showSuccess(msg){ showMessage(msg, false, true); }
 
@@ -55,7 +60,6 @@
       return;
     }
 
-    // Обработка выделенных строк (как раньше: группировка по дате + фильтр "шума")
     const lines = sel.split('\n').map(l => l.trim()).filter(Boolean);
     const dateRe = /^[A-Z][a-z]{2} \d{1,2}, \d{4} @/;
     const noiseRe = /^(INFO|DEBUG|WARN|WARNING|ERROR|TRACE|-|–|—)$/i;
