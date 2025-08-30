@@ -1,6 +1,6 @@
 (function(){
 
-  // --- Контейнер для уведомлений (тот же что и в AutoTrace.js) ---
+  // --- Контейнер уведомлений (тот же что и в AutoTrace.js) ---
   let notifContainer = document.getElementById("notif-container");
   if (!notifContainer) {
     notifContainer = document.createElement("div");
@@ -13,9 +13,16 @@
     document.body.appendChild(notifContainer);
   }
 
-  let notifIndex = 0; // Индекс для позиционирования уведомлений
+  const notifications = [];
+  const notifHeight = 50;
+  const gap = 10;
 
-  // --- Анимированное сообщение ---
+  function updatePositions() {
+    notifications.forEach((notif, i) => {
+      notif.style.bottom = `${20 + i * (notifHeight + gap)}px`;
+    });
+  }
+
   function showMessage(msg, isError = false, isSuccess = false) {
     const div = document.createElement("div");
     div.textContent = msg;
@@ -25,17 +32,16 @@
     div.style.color = "white";
     div.style.fontFamily = "sans-serif";
     div.style.fontSize = "14px";
-    div.style.opacity = "0";
+    div.style.width = "300px";
     div.style.position = "absolute";
     div.style.right = "0px";
-    div.style.width = "300px";
-    const currentIndex = notifIndex;
-    div.style.bottom = `${20 + currentIndex * 60}px`; // фиксированное место
-    notifIndex++;
-
+    div.style.opacity = "0";
+    div.style.transform = "translateY(20px)";
     div.style.transition = "all 0.3s ease";
 
     notifContainer.appendChild(div);
+    notifications.push(div);
+    updatePositions();
 
     requestAnimationFrame(() => {
       div.style.opacity = "1";
@@ -45,7 +51,12 @@
     setTimeout(() => {
       div.style.opacity = "0";
       div.style.transform = "translateY(20px)";
-      setTimeout(() => div.remove(), 300);
+      setTimeout(() => {
+        notifContainer.removeChild(div);
+        const index = notifications.indexOf(div);
+        if (index > -1) notifications.splice(index, 1);
+        updatePositions();
+      }, 300);
     }, 2000);
   }
 
