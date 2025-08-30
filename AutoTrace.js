@@ -1,6 +1,23 @@
-(function(){
+javascript:(function(){
 
-  // --- UI: прогресс и ошибки ---
+  // --- UI: ошибки и прогресс ---
+  function showError(msg){
+    const wrap=document.createElement('div');
+    wrap.textContent=msg;
+    wrap.style.position='fixed';
+    wrap.style.bottom='20px';
+    wrap.style.right='20px';
+    wrap.style.padding='10px 15px';
+    wrap.style.borderRadius='8px';
+    wrap.style.background='#ff4d4f';
+    wrap.style.color='white';
+    wrap.style.fontFamily='sans-serif';
+    wrap.style.fontSize='14px';
+    wrap.style.zIndex=999999;
+    document.body.appendChild(wrap);
+    setTimeout(()=>wrap.remove(),2000);
+  }
+
   function showProgress(){
     const wrap=document.createElement('div');
     wrap.style.position='fixed';
@@ -41,57 +58,30 @@
     }
   }
 
-  function showError(msg){
-    const wrap=document.createElement('div');
-    wrap.textContent=msg;
-    wrap.style.position='fixed';
-    wrap.style.bottom='20px';
-    wrap.style.right='20px';
-    wrap.style.padding='10px 15px';
-    wrap.style.borderRadius='8px';
-    wrap.style.background='#ff4d4f';
-    wrap.style.color='white';
-    wrap.style.fontFamily='sans-serif';
-    wrap.style.fontSize='14px';
-    wrap.style.zIndex=999999;
-    document.body.appendChild(wrap);
-    setTimeout(()=>wrap.remove(),2000);
-  }
+  // --- XPath ---
+  function x(p){return document.evaluate(p,document,null,XPathResult.FIRST_ORDERED_NODE_TYPE,null).singleNodeValue;}
 
-  function x(p){ return document.evaluate(p,document,null,XPathResult.FIRST_ORDERED_NODE_TYPE,null).singleNodeValue; }
+  const s=x('/html/body/div[1]/div/div/div/div[2]/div/div/div/div/div[2]/div/div/div');
+  if(!s){showError('Элемент для скролла не найден'); return;}
 
-  // --- Основные элементы ---
-  const s=x('/html/body/div[1]/div/div/div/div[2]/div/div/div/div/div[2]/div/div/div'); // скроллируемый контейнер
   const countXPath='/html/body/div[1]/div/div/div/div[2]/div/div/div/div/div[2]/div/div/div/div[2]/div[1]/div[1]/div[1]/div[1]/div/div/div[1]/div/strong';
   const tXPath='/html/body/div[1]/div/div/div/div[2]/div/div/div/div/div[2]/div/div/div/div[2]/div[2]/div/table';
-  const taXPath='/html/body/div[1]/div/div/div/div[2]/div/div/div/div/div[2]/div/div/div/div[1]/div[1]/div[1]/div/div[2]/div/textarea';
+  const taXPath='/html/body/div[1]/div/div/div/div/div[2]/div/div/div/div/div[2]/div/div/div/div[1]/div[1]/div[1]/div/div[2]/div/textarea';
   const bXPath='/html/body/div[1]/div/div/div/div[2]/div/div/div/div/div[2]/div/div/div/div[1]/div[1]/div[3]/div/div/div/div/div[2]/span/button';
-
-  if(!s){ showError('Элемент для скролла не найден'); return; }
 
   const cntEl=x(countXPath);
   const cnt=cntEl?parseInt(cntEl.textContent.trim(),10):0;
 
-  const table=x(tXPath);
-  if(!table){ showError('Таблица не найдена'); return; }
-
-  const headers=[...table.querySelectorAll('thead tr th')].map(th=>th.innerText.trim());
-  const traceIdx=headers.indexOf("message.traceid");
-  if(traceIdx===-1){ showError('Трейсы не найдены'); return; }
-
-  // --- Подсчет строк таблицы ---
-  function getRowCount(){
-    try{
-      return table.querySelectorAll('tbody tr').length;
-    }catch(e){
-      showError('Ошибка при подсчёте строк');
-      return 0;
-    }
-  }
-
-  // --- Финальная обработка ---
+  // --- Функция финальной обработки ---
   function runAfterScroll(){
     try{
+      const table=x(tXPath);
+      if(!table){showError('Таблица не найдена'); return;}
+
+      const headers=[...table.querySelectorAll('thead tr th')].map(th=>th.innerText.trim());
+      const traceIdx=headers.indexOf("message.traceid");
+      if(traceIdx===-1){showError('Трейсы не найдены'); return;}
+
       let ids=[];
       table.querySelectorAll('tbody tr').forEach(tr=>{
         const v=tr.children[traceIdx]?.innerText.trim();
@@ -103,7 +93,7 @@
 
       const ta=x(taXPath);
       if(ta){
-        const setter=Object.getOwnPropertyDescriptor(window.HTMLTextAreaElement.prototype,"value").set;
+        let setter=Object.getOwnPropertyDescriptor(window.HTMLTextAreaElement.prototype,"value").set;
         setter.call(ta,txt);
         ta.dispatchEvent(new Event("input",{bubbles:true}));
         ta.dispatchEvent(new Event("change",{bubbles:true}));
@@ -114,12 +104,16 @@
 
       s.scrollTop=0;
       if(prog) prog.finish();
-    }catch(e){ showError('Что-то пошло не так'); }
+    }catch(e){
+      showError('Что-то пошло не так');
+    }
   }
 
-  // --- Скролл таблицы ---
+  // --- Скролл ---
   function scrollLoop(){
-    if(!s || stopRequested) { runAfterScroll(); return; }
+    if(!s) return;
+    if(stopRequested){runAfterScroll(); return;}
+
     try{
       s.scrollTop=s.scrollHeight;
       step++;
@@ -127,35 +121,30 @@
 
       timerID=setTimeout(()=>{
         const rows=getRowCount();
-        if(rows>prevRows){prevRows=rows; unchanged=0;}
-        else unchanged++;
-
-        if(unchanged<10 && !stopRequested){
-          scrollLoop();
-        }else{
-          runAfterScroll();
-        }
+        if(rows>prevRows){prevRows=rows;unchanged=0;} else unchanged++;
+        if(unchanged<10 && !stopRequested){scrollLoop();}
+        else{runAfterScroll();}
       },100);
-    }catch(e){
-      showError('Ошибка при скролле');
-      runAfterScroll();
-    }
+    }catch(e){showError('Ошибка при скролле'); runAfterScroll();}
   }
 
-  let step=0, prevRows=0, unchanged=0, stopRequested=false, timerID=null;
-  let prog=null;
+  function getRowCount(){
+    try{
+      const table=x(tXPath);
+      if(!table) return 0;
+      return table.querySelectorAll('tbody tr').length;
+    }catch(e){showError('Ошибка при подсчёте строк'); return 0;}
+  }
 
-  if(cnt>50){
-    // --- создаем прогресс только если таблица и traceid есть и cnt > 50 ---
-    prog=showProgress();
-    prog.stopButton.onclick=()=>{
-      stopRequested=true;
-      if(timerID) clearTimeout(timerID);
-      runAfterScroll();
-    };
-    scrollLoop();
-  }else{
+  // --- Главная логика ---
+  let prog=null, step=0, prevRows=0, unchanged=0, stopRequested=false, timerID=null;
+
+  if(isNaN(cnt) || cnt <= 50){
     runAfterScroll();
+  } else {
+    prog=showProgress();
+    prog.stopButton.onclick=()=>{stopRequested=true; if(timerID) clearTimeout(timerID); runAfterScroll();};
+    scrollLoop();
   }
 
 })();
