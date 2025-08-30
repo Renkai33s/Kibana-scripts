@@ -64,24 +64,27 @@
 
   // --- Основные элементы ---
   const s=x('/html/body/div[1]/div/div/div/div[2]/div/div/div/div/div[2]/div/div/div'); // скроллируемый контейнер
-  if(!s){showError('Элемент для скролла не найден');return;}
+  if(!s){showError('Элемент для скролла не найден'); return;}
 
   const countXPath='/html/body/div[1]/div/div/div/div[2]/div/div/div/div/div[2]/div/div/div/div[2]/div[1]/div[1]/div[1]/div[1]/div/div/div[1]/div/strong';
   const tXPath='/html/body/div[1]/div/div/div/div[2]/div/div/div/div/div[2]/div/div/div/div[2]/div[2]/div/table';
   const taXPath='/html/body/div[1]/div/div/div/div[2]/div/div/div/div/div[2]/div/div/div/div[1]/div[1]/div[1]/div/div[2]/div/textarea';
   const bXPath='/html/body/div[1]/div/div/div/div[2]/div/div/div/div/div[2]/div/div/div/div[1]/div[1]/div[3]/div/div/div/div/div[2]/span/button';
 
-  const prog=showProgress();
+  // --- Условие: только если strong > 50 ---
+  const cntEl=x(countXPath);
+  let cnt=cntEl?parseInt(cntEl.textContent.trim(),10):0;
 
-  let step=0, prevRows=0, unchanged=0, stopRequested=false, timerID=null;
+  // --- Проверка таблицы и traceid перед любыми действиями ---
+  const table=x(tXPath);
+  if(!table){ showError('Таблица не найдена'); return; }
+  const headers=[...table.querySelectorAll('thead tr th')].map(th=>th.innerText.trim());
+  const traceIdx=headers.indexOf("message.traceid");
+  if(traceIdx===-1){ showError('Трейсы не найдены'); return; }
 
-  prog.stopButton.onclick=()=>{
-    stopRequested=true;
-    if(timerID){clearTimeout(timerID);}
-    runAfterScroll();
-  };
+  // --- Здесь прогресс создаем только если будем скроллить ---
+  let prog=null, step=0, prevRows=0, unchanged=0, stopRequested=false, timerID=null;
 
-  // --- Подсчет строк таблицы ---
   function getRowCount(){
     try{
       const table=x(tXPath);
@@ -93,21 +96,8 @@
     }
   }
 
-  // --- Финальная обработка: собрать traceid, вставить в textarea, кликнуть кнопку ---
   function runAfterScroll(){
     try{
-      const table=x(tXPath);
-      if(!table){showError('Таблица не найдена'); return;}
-
-      const headers=[...table.querySelectorAll('thead tr th')].map(th=>th.innerText.trim());
-      const traceIdx=headers.indexOf("message.traceid");
-
-      // --- Новое условие: если нет message.traceid ---
-      if(traceIdx===-1){
-        showError('Трейсы не найдены');
-        return;
-      }
-
       let ids=[];
       table.querySelectorAll('tbody tr').forEach(tr=>{
         const v=tr.children[traceIdx]?.innerText.trim();
@@ -128,17 +118,15 @@
       const b=x(bXPath);
       if(b) b.click();
 
-      s.scrollTop=0;
-      prog.finish();
+      if(prog) { s.scrollTop=0; prog.finish(); }
     }catch(e){
       showError('Что-то пошло не так');
     }
   }
 
-  // --- Скролл таблицы ---
   function scrollLoop(){
-    if(!s)return;
-    if(stopRequested){runAfterScroll(); return;}
+    if(!s) return;
+    if(stopRequested){ runAfterScroll(); return; }
 
     try{
       s.scrollTop=s.scrollHeight;
@@ -162,13 +150,16 @@
     }
   }
 
-  // --- Условие: только если strong > 50 ---
-  const cntEl=x(countXPath);
-  let cnt=cntEl?parseInt(cntEl.textContent.trim(),10):0;
-
+  // --- Запуск ---
   if(isNaN(cnt)||cnt<=50){
     runAfterScroll();
   }else{
+    prog = showProgress();
+    prog.stopButton.onclick = ()=>{
+      stopRequested=true;
+      if(timerID) clearTimeout(timerID);
+      runAfterScroll();
+    };
     scrollLoop();
   }
 
