@@ -13,7 +13,8 @@
     div.style.right = '20px';
     div.style.padding = '10px 15px';
     div.style.borderRadius = '8px';
-    div.style.background = isError ? '#ff4d4f' : isSuccess ? '#52c41a' : '#3498db';
+    // Изменили цвет по умолчанию на красный для "Логи не выделены"
+    div.style.background = isError ? '#ff4d4f' : isSuccess ? '#52c41a' : '#ff4d4f';
     div.style.color = 'white';
     div.style.fontFamily = 'sans-serif';
     div.style.fontSize = '14px';
@@ -25,7 +26,7 @@
   // Получаем выделенный текст
   const sel = window.getSelection().toString().trim();
   if (!sel) {
-    showMessage('Сначала выдели логи');
+    showMessage('Логи не выделены', true); // теперь передаём true, чтобы явно красный
     return;
   }
 
@@ -67,6 +68,6 @@
 
   // Копируем в буфер
   navigator.clipboard.writeText(out)
-    .then(() => showMessage('Скопировано в буфер', false, true))
+    .then(() => showMessage('Логи скопированы', false, true))
     .catch(() => showMessage('Что-то пошло не так', true));
 })();
