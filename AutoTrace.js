@@ -61,7 +61,10 @@
   const cntEl = x(countXPath);
   let cnt = 0;
   if (cntEl && cntEl.textContent) {
-    cnt = parseInt(cntEl.textContent.trim(), 10) || 0;
+      // Убираем все нецифровые символы (запятые)
+      const numericText = cntEl.textContent.replace(/\D/g, '');
+      cnt = parseInt(numericText, 10) || 0;
+      console.log('cntEl.textContent:', cntEl.textContent, '=> cnt:', cnt);
   }
 
   const table = x(tXPath);
@@ -164,8 +167,12 @@
 
       timerID = setTimeout(() => {
         const rows = getRowCount();
-        if(rows > prevRows){ prevRows = rows; unchanged = 0; }
-        else unchanged++;
+        if(rows > prevRows){
+          prevRows = rows;
+          unchanged = 0;
+        } else {
+          unchanged++;
+        }
 
         if(unchanged < 10){
           scrollLoop();
@@ -179,16 +186,16 @@
     }
   }
 
-  // --- Решение: проверка cnt ---
+  // --- Решение: проверка cnt с удалением запятых ---
   if(cnt > 50){
-    prog = showProgress();
-    prog.stopButton.onclick = () => {
-      if(timerID) clearTimeout(timerID);
-      runAfterScroll();
-    };
-    scrollLoop();
+      prog = showProgress();
+      prog.stopButton.onclick = () => {
+          if(timerID) clearTimeout(timerID);
+          runAfterScroll();
+      };
+      scrollLoop();
   } else {
-    runAfterScroll();
+      runAfterScroll();
   }
 
 })();
