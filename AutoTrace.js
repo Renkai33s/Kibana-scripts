@@ -137,8 +137,10 @@
       });
       ids = [...new Set(ids)];
 
+      if(prog) prog.remove();
+      s.scrollTop = 0; // Скроллим наверх всегда
+
       if(ids.length === 0){
-        if(prog) prog.remove();
         showError('Трейсы не найдены');
         return;
       }
@@ -155,11 +157,10 @@
       const b = x(bXPath);
       if(b) b.click();
 
-      if(prog) prog.remove();
-      s.scrollTop = 0;
       showSuccess("Трейсы подставлены");
     } catch(e) {
       if(prog) prog.remove();
+      s.scrollTop = 0; // Скроллим наверх при ошибке
       showError('Что-то пошло не так');
     }
   }
