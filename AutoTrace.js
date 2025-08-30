@@ -1,72 +1,67 @@
 (function(){
 
   // --- Контейнер для уведомлений ---
-  let notifContainer = document.getElementById('notifications');
-  if(!notifContainer){
-    notifContainer = document.createElement('div');
-    notifContainer.id = 'notifications';
-    notifContainer.style.position = 'fixed';
-    notifContainer.style.bottom = '20px';
-    notifContainer.style.right = '20px';
-    notifContainer.style.display = 'flex';
-    notifContainer.style.flexDirection = 'column-reverse'; // новые снизу
-    notifContainer.style.gap = '10px';
-    notifContainer.style.zIndex = '999999';
+  let notifContainer = document.getElementById("notif-container");
+  if (!notifContainer) {
+    notifContainer = document.createElement("div");
+    notifContainer.id = "notif-container";
+    notifContainer.style.position = "fixed";
+    notifContainer.style.bottom = "20px";
+    notifContainer.style.right = "20px";
+    notifContainer.style.display = "flex";
+    notifContainer.style.flexDirection = "column";
+    notifContainer.style.gap = "10px";
+    notifContainer.style.zIndex = 999999;
     document.body.appendChild(notifContainer);
   }
 
-  function createNotification(msg, bgColor = '#ff4d4f') {
-    const wrap = document.createElement('div');
-    wrap.textContent = msg;
-    wrap.style.background = bgColor;
-    wrap.style.color = 'white';
-    wrap.style.padding = '10px 15px';
-    wrap.style.borderRadius = '8px';
-    wrap.style.fontFamily = 'sans-serif';
-    wrap.style.fontSize = '14px';
-    wrap.style.opacity = '0';
-    wrap.style.transform = 'translateY(20px)';
-    wrap.style.transition = 'opacity 0.3s ease, transform 0.3s ease';
+  // --- Анимированное сообщение ---
+  function showMessage(msg, isError = false, isSuccess = false) {
+    const div = document.createElement("div");
+    div.textContent = msg;
+    div.style.padding = "10px 15px";
+    div.style.borderRadius = "8px";
+    div.style.background = isError ? "#ff4d4f" : isSuccess ? "#52c41a" : "#3498db";
+    div.style.color = "white";
+    div.style.fontFamily = "sans-serif";
+    div.style.fontSize = "14px";
+    div.style.opacity = "0";
+    div.style.transform = "translateY(20px)";
+    div.style.transition = "all 0.3s ease";
 
-    notifContainer.appendChild(wrap);
-    wrap.offsetHeight; // Форсируем первый рендер
+    notifContainer.appendChild(div);
 
-    wrap.style.opacity = '1';
-    wrap.style.transform = 'translateY(0)';
+    // плавное появление
+    requestAnimationFrame(() => {
+      div.style.opacity = "1";
+      div.style.transform = "translateY(0)";
+    });
 
+    // плавное скрытие
     setTimeout(() => {
-      wrap.style.opacity = '0';
-      wrap.style.transform = 'translateY(20px)';
-      wrap.addEventListener('transitionend', () => wrap.remove());
+      div.style.opacity = "0";
+      div.style.transform = "translateY(20px)";
+      setTimeout(() => div.remove(), 300);
     }, 2000);
-
-    return wrap;
   }
 
-  function showError(msg){ createNotification(msg, '#ff4d4f'); }
-  function showMessage(msg, isError=false, isSuccess=false){
-    const bg = isError ? '#ff4d4f' : isSuccess ? '#52c41a' : '#3498db';
-    createNotification(msg, bg);
-  }
+  function showError(msg){ showMessage(msg, true, false); }
 
+  // --- Прогресс ---
   function showProgress(){
     const wrap=document.createElement('div');
-    wrap.style.position='fixed';
-    wrap.style.bottom='20px';
-    wrap.style.right='20px';
     wrap.style.padding='6px 10px';
     wrap.style.borderRadius='8px';
     wrap.style.background='#3498db';
     wrap.style.color='white';
     wrap.style.fontFamily='sans-serif';
     wrap.style.fontSize='14px';
-    wrap.style.zIndex=999999;
     wrap.style.display='flex';
     wrap.style.alignItems='center';
     wrap.style.gap='8px';
-    wrap.style.opacity='0';
-    wrap.style.transform='translateY(20px)';
-    wrap.style.transition='opacity 0.3s ease, transform 0.3s ease';
+    wrap.style.opacity="0";
+    wrap.style.transform="translateY(20px)";
+    wrap.style.transition="all 0.3s ease";
 
     const label=document.createElement('div');
     label.textContent='0 скроллов';
@@ -84,19 +79,25 @@
     wrap.appendChild(btn);
 
     notifContainer.appendChild(wrap);
-    wrap.offsetHeight; // Форсируем стиль
-    wrap.style.opacity = '1';
-    wrap.style.transform = 'translateY(0)';
+
+    requestAnimationFrame(()=>{
+      wrap.style.opacity="1";
+      wrap.style.transform="translateY(0)";
+    });
 
     return {
       update:function(step){label.textContent=step+' скроллов';},
-      stopButton:btn
+      stopButton:btn,
+      wrap:wrap
     }
   }
 
-  function x(p){ return document.evaluate(p,document,null,XPathResult.FIRST_ORDERED_NODE_TYPE,null).singleNodeValue; }
+  function x(p){
+    return document.evaluate(p,document,null,XPathResult.FIRST_ORDERED_NODE_TYPE,null).singleNodeValue;
+  }
 
-  const s=x('/html/body/div[1]/div/div/div/div[2]/div/div/div/div/div[2]/div/div/div');
+  // --- Основные элементы ---
+  const s=x('/html/body/div[1]/div/div/div/div[2]/div/div/div/div/div[2]/div/div/div'); 
   if(!s){showError('Элемент для скролла не найден'); return;}
 
   const countXPath='/html/body/div[1]/div/div/div/div[2]/div/div/div/div/div[2]/div/div/div/div[2]/div[1]/div[1]/div[1]/div[1]/div/div/div[1]/div/strong';
@@ -104,15 +105,18 @@
   const taXPath='/html/body/div[1]/div/div/div/div[2]/div/div/div/div/div[2]/div/div/div/div[1]/div[1]/div[1]/div/div[2]/div/textarea';
   const bXPath='/html/body/div[1]/div/div/div/div[2]/div/div/div/div/div[2]/div/div/div/div[1]/div[1]/div[3]/div/div/div/div/div[2]/span/button';
 
+  // --- Условие: только если strong > 50 ---
   const cntEl=x(countXPath);
   let cnt=cntEl?parseInt(cntEl.textContent.trim(),10):0;
 
+  // --- Проверка таблицы и traceid ---
   const table=x(tXPath);
   if(!table){ showError('Таблица не найдена'); return; }
   const headers=[...table.querySelectorAll('thead tr th')].map(th=>th.innerText.trim());
   const traceIdx=headers.indexOf("message.traceid");
   if(traceIdx===-1){ showError('Трейсы не найдены'); return; }
 
+  // --- Прогресс ---
   let prog=null, step=0, prevRows=0, unchanged=0, stopRequested=false, timerID=null;
 
   function getRowCount(){
@@ -120,10 +124,12 @@
       const table=x(tXPath);
       if(!table)return 0;
       return table.querySelectorAll('tbody tr').length;
-    }catch(e){ showError('Ошибка при подсчёте строк'); return 0; }
+    }catch(e){
+      showError('Ошибка при подсчёте строк');
+      return 0;
+    }
   }
 
-  // --- Подстановка трейсов, уведомление только одно ---
   function runAfterScroll(){
     try{
       let ids=[];
@@ -146,9 +152,16 @@
       const b=x(bXPath);
       if(b) b.click();
 
-      showMessage('Трейсы подставлены', false, true);
+      // Убираем прогресс
+      if(prog && prog.wrap){
+        prog.wrap.remove();
+        prog=null;
+      }
 
-    }catch(e){ showError('Что-то пошло не так'); }
+      showMessage('Трейсы подставлены', false, true);
+    }catch(e){
+      showError('Что-то пошло не так');
+    }
   }
 
   function scrollLoop(){
@@ -158,7 +171,7 @@
     try{
       s.scrollTop=s.scrollHeight;
       step++;
-      if(prog) prog.update(step);
+      prog.update(step);
 
       timerID=setTimeout(()=>{
         const rows=getRowCount();
@@ -171,7 +184,10 @@
           runAfterScroll();
         }
       },100);
-    }catch(e){ showError('Ошибка при скролле'); runAfterScroll(); }
+    }catch(e){
+      showError('Ошибка при скролле');
+      runAfterScroll();
+    }
   }
 
   // --- Запуск ---
@@ -182,7 +198,7 @@
     prog.stopButton.onclick = ()=>{
       stopRequested=true;
       if(timerID) clearTimeout(timerID);
-      runAfterScroll(); // уведомление только "Трейсы подставлены"
+      runAfterScroll();
     };
     scrollLoop();
   }
