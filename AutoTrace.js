@@ -58,37 +58,30 @@
     setTimeout(()=>wrap.remove(),2000);
   }
 
-  function x(p){
-    return document.evaluate(p,document,null,XPathResult.FIRST_ORDERED_NODE_TYPE,null).singleNodeValue;
-  }
+  function x(p){ return document.evaluate(p,document,null,XPathResult.FIRST_ORDERED_NODE_TYPE,null).singleNodeValue; }
 
   // --- Основные элементы ---
   const s=x('/html/body/div[1]/div/div/div/div[2]/div/div/div/div/div[2]/div/div/div'); // скроллируемый контейнер
-  if(!s){showError('Элемент для скролла не найден'); return;}
-
   const countXPath='/html/body/div[1]/div/div/div/div[2]/div/div/div/div/div[2]/div/div/div/div[2]/div[1]/div[1]/div[1]/div[1]/div/div/div[1]/div/strong';
   const tXPath='/html/body/div[1]/div/div/div/div[2]/div/div/div/div/div[2]/div/div/div/div[2]/div[2]/div/table';
   const taXPath='/html/body/div[1]/div/div/div/div[2]/div/div/div/div/div[2]/div/div/div/div[1]/div[1]/div[1]/div/div[2]/div/textarea';
   const bXPath='/html/body/div[1]/div/div/div/div[2]/div/div/div/div/div[2]/div/div/div/div[1]/div[1]/div[3]/div/div/div/div/div[2]/span/button';
 
-  // --- Условие: только если strong > 50 ---
-  const cntEl=x(countXPath);
-  let cnt=cntEl?parseInt(cntEl.textContent.trim(),10):0;
+  if(!s){ showError('Элемент для скролла не найден'); return; }
 
-  // --- Проверка таблицы и traceid перед любыми действиями ---
+  const cntEl=x(countXPath);
+  const cnt=cntEl?parseInt(cntEl.textContent.trim(),10):0;
+
   const table=x(tXPath);
   if(!table){ showError('Таблица не найдена'); return; }
+
   const headers=[...table.querySelectorAll('thead tr th')].map(th=>th.innerText.trim());
   const traceIdx=headers.indexOf("message.traceid");
   if(traceIdx===-1){ showError('Трейсы не найдены'); return; }
 
-  // --- Здесь прогресс создаем только если будем скроллить ---
-  let prog=null, step=0, prevRows=0, unchanged=0, stopRequested=false, timerID=null;
-
+  // --- Подсчет строк таблицы ---
   function getRowCount(){
     try{
-      const table=x(tXPath);
-      if(!table)return 0;
       return table.querySelectorAll('tbody tr').length;
     }catch(e){
       showError('Ошибка при подсчёте строк');
@@ -96,6 +89,7 @@
     }
   }
 
+  // --- Финальная обработка ---
   function runAfterScroll(){
     try{
       let ids=[];
@@ -109,7 +103,7 @@
 
       const ta=x(taXPath);
       if(ta){
-        let setter=Object.getOwnPropertyDescriptor(window.HTMLTextAreaElement.prototype,"value").set;
+        const setter=Object.getOwnPropertyDescriptor(window.HTMLTextAreaElement.prototype,"value").set;
         setter.call(ta,txt);
         ta.dispatchEvent(new Event("input",{bubbles:true}));
         ta.dispatchEvent(new Event("change",{bubbles:true}));
@@ -118,16 +112,14 @@
       const b=x(bXPath);
       if(b) b.click();
 
-      if(prog) { s.scrollTop=0; prog.finish(); }
-    }catch(e){
-      showError('Что-то пошло не так');
-    }
+      s.scrollTop=0;
+      if(prog) prog.finish();
+    }catch(e){ showError('Что-то пошло не так'); }
   }
 
+  // --- Скролл таблицы ---
   function scrollLoop(){
-    if(!s) return;
-    if(stopRequested){ runAfterScroll(); return; }
-
+    if(!s || stopRequested) { runAfterScroll(); return; }
     try{
       s.scrollTop=s.scrollHeight;
       step++;
@@ -135,7 +127,7 @@
 
       timerID=setTimeout(()=>{
         const rows=getRowCount();
-        if(rows>prevRows){prevRows=rows;unchanged=0;}
+        if(rows>prevRows){prevRows=rows; unchanged=0;}
         else unchanged++;
 
         if(unchanged<10 && !stopRequested){
@@ -150,17 +142,20 @@
     }
   }
 
-  // --- Запуск ---
-  if(isNaN(cnt)||cnt<=50){
-    runAfterScroll();
-  }else{
-    prog = showProgress();
-    prog.stopButton.onclick = ()=>{
+  let step=0, prevRows=0, unchanged=0, stopRequested=false, timerID=null;
+  let prog=null;
+
+  if(cnt>50){
+    // --- создаем прогресс только если таблица и traceid есть и cnt > 50 ---
+    prog=showProgress();
+    prog.stopButton.onclick=()=>{
       stopRequested=true;
       if(timerID) clearTimeout(timerID);
       runAfterScroll();
     };
     scrollLoop();
+  }else{
+    runAfterScroll();
   }
 
 })();
