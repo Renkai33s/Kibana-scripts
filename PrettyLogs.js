@@ -1,23 +1,34 @@
 (function() {
+  // --- Контейнер для уведомлений ---
+  let notifContainer = document.getElementById('notifications');
+  if(!notifContainer){
+    notifContainer = document.createElement('div');
+    notifContainer.id = 'notifications';
+    notifContainer.style.position = 'fixed';
+    notifContainer.style.bottom = '20px';
+    notifContainer.style.right = '20px';
+    notifContainer.style.display = 'flex';
+    notifContainer.style.flexDirection = 'column-reverse'; // новые снизу
+    notifContainer.style.gap = '10px';
+    notifContainer.style.zIndex = '999999';
+    document.body.appendChild(notifContainer);
+  }
+
   function createNotification(msg, bgColor = '#ff4d4f') {
     const wrap = document.createElement('div');
     wrap.textContent = msg;
-    wrap.style.position = 'fixed';
-    wrap.style.bottom = '20px';
-    wrap.style.right = '20px';
-    wrap.style.padding = '10px 15px';
-    wrap.style.borderRadius = '8px';
     wrap.style.background = bgColor;
     wrap.style.color = 'white';
+    wrap.style.padding = '10px 15px';
+    wrap.style.borderRadius = '8px';
     wrap.style.fontFamily = 'sans-serif';
     wrap.style.fontSize = '14px';
-    wrap.style.zIndex = 999999;
     wrap.style.opacity = '0';
     wrap.style.transform = 'translateY(20px)';
     wrap.style.transition = 'opacity 0.3s ease, transform 0.3s ease';
-    document.body.appendChild(wrap);
 
-    wrap.offsetHeight; // форсируем первый рендер
+    notifContainer.appendChild(wrap);
+    wrap.offsetHeight; // Форсируем первый рендер
 
     wrap.style.opacity = '1';
     wrap.style.transform = 'translateY(0)';
@@ -27,6 +38,8 @@
       wrap.style.transform = 'translateY(20px)';
       wrap.addEventListener('transitionend', () => wrap.remove());
     }, 2000);
+
+    return wrap;
   }
 
   function showMessage(msg, isError = false, isSuccess = false) {
