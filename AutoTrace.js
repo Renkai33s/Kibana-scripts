@@ -90,16 +90,6 @@
 
     return {
       update:function(step){label.textContent=step+' скроллов';},
-      finish:function(){
-        wrap.style.background='#52c41a';
-        label.textContent='Готово';
-        btn.remove();
-        setTimeout(()=>{
-          wrap.style.opacity='0';
-          wrap.style.transform='translateY(20px)';
-          wrap.addEventListener('transitionend',()=>wrap.remove());
-        },1500);
-      },
       stopButton:btn
     }
   }
@@ -133,6 +123,7 @@
     }catch(e){ showError('Ошибка при подсчёте строк'); return 0; }
   }
 
+  // --- Подстановка трейсов, уведомление только одно ---
   function runAfterScroll(){
     try{
       let ids=[];
@@ -155,9 +146,8 @@
       const b=x(bXPath);
       if(b) b.click();
 
-      if(prog) { s.scrollTop=0; prog.finish(); }
-
       showMessage('Трейсы подставлены', false, true);
+
     }catch(e){ showError('Что-то пошло не так'); }
   }
 
@@ -168,7 +158,7 @@
     try{
       s.scrollTop=s.scrollHeight;
       step++;
-      prog.update(step);
+      if(prog) prog.update(step);
 
       timerID=setTimeout(()=>{
         const rows=getRowCount();
@@ -184,6 +174,7 @@
     }catch(e){ showError('Ошибка при скролле'); runAfterScroll(); }
   }
 
+  // --- Запуск ---
   if(isNaN(cnt)||cnt<=50){
     runAfterScroll();
   }else{
@@ -191,7 +182,7 @@
     prog.stopButton.onclick = ()=>{
       stopRequested=true;
       if(timerID) clearTimeout(timerID);
-      runAfterScroll();
+      runAfterScroll(); // уведомление только "Трейсы подставлены"
     };
     scrollLoop();
   }
