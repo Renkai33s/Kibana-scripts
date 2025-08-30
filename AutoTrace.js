@@ -61,7 +61,6 @@
   const cntEl = x(countXPath);
   let cnt = 0;
   if (cntEl && cntEl.textContent) {
-      // Убираем все нецифровые символы (запятые)
       const numericText = cntEl.textContent.replace(/\D/g, '');
       cnt = parseInt(numericText, 10) || 0;
       console.log('cntEl.textContent:', cntEl.textContent, '=> cnt:', cnt);
@@ -137,6 +136,13 @@
         if(v && v !== "-") ids.push(v);
       });
       ids = [...new Set(ids)];
+
+      if(ids.length === 0){
+        if(prog) prog.remove();
+        showError('Трейсы не найдены');
+        return;
+      }
+
       const txt = "(" + ids.map(v => '"' + v + '"').join(" ") + ")";
 
       const ta = x(taXPath);
@@ -186,7 +192,6 @@
     }
   }
 
-  // --- Решение: проверка cnt с удалением запятых ---
   if(cnt > 50){
       prog = showProgress();
       prog.stopButton.onclick = () => {
