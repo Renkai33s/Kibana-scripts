@@ -1,6 +1,6 @@
 (function(){
 
-  // --- Контейнер уведомлений (тот же что и в AutoTrace.js) ---
+  // --- Универсальный контейнер уведомлений ---
   let notifContainer = document.getElementById("notif-container");
   if (!notifContainer) {
     notifContainer = document.createElement("div");
@@ -14,16 +14,17 @@
   }
 
   const notifications = [];
-  const notifHeight = 50;
   const gap = 10;
 
   function updatePositions() {
-    notifications.forEach((notif, i) => {
-      notif.style.bottom = `${20 + i * (notifHeight + gap)}px`;
-    });
+    let currentBottom = 20;
+    for (let notif of notifications) {
+      notif.style.bottom = currentBottom + 'px';
+      currentBottom += notif.offsetHeight + gap;
+    }
   }
 
-  function showMessage(msg, isError = false, isSuccess = false) {
+  function showMessage(msg, isError=false, isSuccess=false, duration=2000){
     const div = document.createElement("div");
     div.textContent = msg;
     div.style.padding = "10px 15px";
@@ -41,9 +42,9 @@
 
     notifContainer.appendChild(div);
     notifications.push(div);
-    updatePositions();
 
     requestAnimationFrame(() => {
+      updatePositions();
       div.style.opacity = "1";
       div.style.transform = "translateY(0)";
     });
@@ -53,15 +54,15 @@
       div.style.transform = "translateY(20px)";
       setTimeout(() => {
         notifContainer.removeChild(div);
-        const index = notifications.indexOf(div);
-        if (index > -1) notifications.splice(index, 1);
+        const idx = notifications.indexOf(div);
+        if (idx !== -1) notifications.splice(idx,1);
         updatePositions();
       }, 300);
-    }, 2000);
+    }, duration);
   }
 
-  function showError(msg){ showMessage(msg, true, false); }
-  function showSuccess(msg){ showMessage(msg, false, true); }
+  function showError(msg){ showMessage(msg,true,false); }
+  function showSuccess(msg){ showMessage(msg,false,true); }
 
   // --- Основная логика: проверка выделения и копирование ---
   try {
