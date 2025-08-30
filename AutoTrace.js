@@ -1,6 +1,47 @@
 (function(){
 
-  // --- UI: прогресс и ошибки ---
+  // --- Универсальные уведомления с анимацией ---
+  function createNotification(msg, bgColor = '#ff4d4f') {
+    const wrap = document.createElement('div');
+    wrap.textContent = msg;
+    wrap.style.position = 'fixed';
+    wrap.style.bottom = '20px';
+    wrap.style.right = '20px';
+    wrap.style.padding = '10px 15px';
+    wrap.style.borderRadius = '8px';
+    wrap.style.background = bgColor;
+    wrap.style.color = 'white';
+    wrap.style.fontFamily = 'sans-serif';
+    wrap.style.fontSize = '14px';
+    wrap.style.zIndex = 999999;
+    wrap.style.opacity = '0';
+    wrap.style.transform = 'translateY(20px)';
+    wrap.style.transition = 'opacity 0.3s ease, transform 0.3s ease';
+    document.body.appendChild(wrap);
+
+    requestAnimationFrame(() => {
+      wrap.style.opacity = '1';
+      wrap.style.transform = 'translateY(0)';
+    });
+
+    setTimeout(() => {
+      wrap.style.opacity = '0';
+      wrap.style.transform = 'translateY(20px)';
+      wrap.addEventListener('transitionend', () => wrap.remove());
+    }, 2000);
+
+    return wrap;
+  }
+
+  function showError(msg){
+    createNotification(msg, '#ff4d4f');
+  }
+
+  function showMessage(msg, isError=false, isSuccess=false){
+    const bg = isError ? '#ff4d4f' : isSuccess ? '#52c41a' : '#3498db';
+    createNotification(msg, bg);
+  }
+
   function showProgress(){
     const wrap=document.createElement('div');
     wrap.style.position='fixed';
@@ -16,6 +57,9 @@
     wrap.style.display='flex';
     wrap.style.alignItems='center';
     wrap.style.gap='8px';
+    wrap.style.opacity='0';
+    wrap.style.transform='translateY(20px)';
+    wrap.style.transition='opacity 0.3s ease, transform 0.3s ease';
 
     const label=document.createElement('div');
     label.textContent='0 скроллов';
@@ -33,29 +77,25 @@
     wrap.appendChild(btn);
 
     document.body.appendChild(wrap);
+    requestAnimationFrame(() => {
+      wrap.style.opacity = '1';
+      wrap.style.transform = 'translateY(0)';
+    });
 
     return {
       update:function(step){label.textContent=step+' скроллов';},
-      finish:function(){wrap.style.background='#52c41a';label.textContent='Готово';btn.remove(); setTimeout(()=>wrap.remove(),2000);},
+      finish:function(){
+        wrap.style.background='#52c41a';
+        label.textContent='Готово';
+        btn.remove();
+        setTimeout(()=>{
+          wrap.style.opacity='0';
+          wrap.style.transform='translateY(20px)';
+          wrap.addEventListener('transitionend',()=>wrap.remove());
+        },1500);
+      },
       stopButton:btn
     }
-  }
-
-  function showError(msg){
-    const wrap=document.createElement('div');
-    wrap.textContent=msg;
-    wrap.style.position='fixed';
-    wrap.style.bottom='20px';
-    wrap.style.right='20px';
-    wrap.style.padding='10px 15px';
-    wrap.style.borderRadius='8px';
-    wrap.style.background='#ff4d4f';
-    wrap.style.color='white';
-    wrap.style.fontFamily='sans-serif';
-    wrap.style.fontSize='14px';
-    wrap.style.zIndex=999999;
-    document.body.appendChild(wrap);
-    setTimeout(()=>wrap.remove(),2000);
   }
 
   function x(p){
@@ -71,18 +111,15 @@
   const taXPath='/html/body/div[1]/div/div/div/div[2]/div/div/div/div/div[2]/div/div/div/div[1]/div[1]/div[1]/div/div[2]/div/textarea';
   const bXPath='/html/body/div[1]/div/div/div/div[2]/div/div/div/div/div[2]/div/div/div/div[1]/div[1]/div[3]/div/div/div/div/div[2]/span/button';
 
-  // --- Условие: только если strong > 50 ---
   const cntEl=x(countXPath);
   let cnt=cntEl?parseInt(cntEl.textContent.trim(),10):0;
 
-  // --- Проверка таблицы и traceid перед любыми действиями ---
   const table=x(tXPath);
   if(!table){ showError('Таблица не найдена'); return; }
   const headers=[...table.querySelectorAll('thead tr th')].map(th=>th.innerText.trim());
   const traceIdx=headers.indexOf("message.traceid");
   if(traceIdx===-1){ showError('Трейсы не найдены'); return; }
 
-  // --- Здесь прогресс создаем только если будем скроллить ---
   let prog=null, step=0, prevRows=0, unchanged=0, stopRequested=false, timerID=null;
 
   function getRowCount(){
