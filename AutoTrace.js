@@ -19,10 +19,11 @@
     wrap.style.transition = 'opacity 0.3s ease, transform 0.3s ease';
     document.body.appendChild(wrap);
 
-    requestAnimationFrame(() => {
-      wrap.style.opacity = '1';
-      wrap.style.transform = 'translateY(0)';
-    });
+    // Форсируем чтение layout для гарантированной анимации
+    wrap.offsetHeight;
+
+    wrap.style.opacity = '1';
+    wrap.style.transform = 'translateY(0)';
 
     setTimeout(() => {
       wrap.style.opacity = '0';
@@ -33,10 +34,7 @@
     return wrap;
   }
 
-  function showError(msg){
-    createNotification(msg, '#ff4d4f');
-  }
-
+  function showError(msg){ createNotification(msg, '#ff4d4f'); }
   function showMessage(msg, isError=false, isSuccess=false){
     const bg = isError ? '#ff4d4f' : isSuccess ? '#52c41a' : '#3498db';
     createNotification(msg, bg);
@@ -77,10 +75,9 @@
     wrap.appendChild(btn);
 
     document.body.appendChild(wrap);
-    requestAnimationFrame(() => {
-      wrap.style.opacity = '1';
-      wrap.style.transform = 'translateY(0)';
-    });
+    wrap.offsetHeight; // Форсируем стиль
+    wrap.style.opacity = '1';
+    wrap.style.transform = 'translateY(0)';
 
     return {
       update:function(step){label.textContent=step+' скроллов';},
@@ -98,12 +95,9 @@
     }
   }
 
-  function x(p){
-    return document.evaluate(p,document,null,XPathResult.FIRST_ORDERED_NODE_TYPE,null).singleNodeValue;
-  }
+  function x(p){ return document.evaluate(p,document,null,XPathResult.FIRST_ORDERED_NODE_TYPE,null).singleNodeValue; }
 
-  // --- Основные элементы ---
-  const s=x('/html/body/div[1]/div/div/div/div[2]/div/div/div/div/div[2]/div/div/div'); // скроллируемый контейнер
+  const s=x('/html/body/div[1]/div/div/div/div[2]/div/div/div/div/div[2]/div/div/div');
   if(!s){showError('Элемент для скролла не найден'); return;}
 
   const countXPath='/html/body/div[1]/div/div/div/div[2]/div/div/div/div/div[2]/div/div/div/div[2]/div[1]/div[1]/div[1]/div[1]/div/div/div[1]/div/strong';
@@ -127,10 +121,7 @@
       const table=x(tXPath);
       if(!table)return 0;
       return table.querySelectorAll('tbody tr').length;
-    }catch(e){
-      showError('Ошибка при подсчёте строк');
-      return 0;
-    }
+    }catch(e){ showError('Ошибка при подсчёте строк'); return 0; }
   }
 
   function runAfterScroll(){
@@ -156,9 +147,9 @@
       if(b) b.click();
 
       if(prog) { s.scrollTop=0; prog.finish(); }
-    }catch(e){
-      showError('Что-то пошло не так');
-    }
+
+      showMessage('Трейсы подставлены', false, true);
+    }catch(e){ showError('Что-то пошло не так'); }
   }
 
   function scrollLoop(){
@@ -181,13 +172,9 @@
           runAfterScroll();
         }
       },100);
-    }catch(e){
-      showError('Ошибка при скролле');
-      runAfterScroll();
-    }
+    }catch(e){ showError('Ошибка при скролле'); runAfterScroll(); }
   }
 
-  // --- Запуск ---
   if(isNaN(cnt)||cnt<=50){
     runAfterScroll();
   }else{
