@@ -126,4 +126,88 @@
     document.body.appendChild(wrap);
 
     return {
-      update:function(ste
+      update:function(step){label.textContent=step+' скроллов';},
+      remove:function(){ wrap.style.opacity='0'; setTimeout(()=>wrap.remove(),300); },
+      stopButton:btn
+    }
+  }
+
+  let prog=null, step=0, prevRows=0, unchanged=0, timerID=null;
+
+  function getRowCount(){
+    try{
+      const table=x(tXPath);
+      if(!table)return 0;
+      return table.querySelectorAll('tbody tr').length;
+    }catch(e){
+      showError('Ошибка при подсчёте строк');
+      return 0;
+    }
+  }
+
+  function runAfterScroll(){
+    try{
+      let ids=[];
+      const table=x(tXPath);
+      table.querySelectorAll('tbody tr').forEach(tr=>{
+        const v=tr.children[traceIdx]?.innerText.trim();
+        if(v && v!=="-") ids.push(v);
+      });
+      ids=[...new Set(ids)];
+      const txt="("+ids.map(v=>'"'+v+'"').join(" ")+")";
+
+      const ta=x(taXPath);
+      if(ta){
+        let setter=Object.getOwnPropertyDescriptor(window.HTMLTextAreaElement.prototype,"value").set;
+        setter.call(ta,txt);
+        ta.dispatchEvent(new Event("input",{bubbles:true}));
+        ta.dispatchEvent(new Event("change",{bubbles:true}));
+      }
+      const b=x(bXPath);
+      if(b) b.click();
+
+      if(prog) prog.remove();
+      s.scrollTop=0;
+      showSuccess("Трейсы подставлены");
+    }catch(e){
+      if(prog) prog.remove();
+      showError('Что-то пошло не так');
+    }
+  }
+
+  function scrollLoop(){
+    if(!s) return;
+    try{
+      s.scrollTop=s.scrollHeight;
+      step++;
+      if(prog) prog.update(step);
+
+      timerID=setTimeout(()=>{
+        const rows=getRowCount();
+        if(rows>prevRows){prevRows=rows;unchanged=0;}
+        else unchanged++;
+
+        if(unchanged<10){
+          scrollLoop();
+        }else{
+          runAfterScroll();
+        }
+      },100);
+    }catch(e){
+      showError('Ошибка при скролле');
+      runAfterScroll();
+    }
+  }
+
+  if(isNaN(cnt)||cnt<=50){
+    runAfterScroll();
+  }else{
+    prog = showProgress();
+    prog.stopButton.onclick = ()=>{
+      if(timerID) clearTimeout(timerID);
+      runAfterScroll();
+    };
+    scrollLoop();
+  }
+
+})();
