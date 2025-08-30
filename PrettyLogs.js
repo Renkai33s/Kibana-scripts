@@ -17,10 +17,10 @@
     wrap.style.transition = 'opacity 0.3s ease, transform 0.3s ease';
     document.body.appendChild(wrap);
 
-    requestAnimationFrame(() => {
-      wrap.style.opacity = '1';
-      wrap.style.transform = 'translateY(0)';
-    });
+    wrap.offsetHeight; // форсируем первый рендер
+
+    wrap.style.opacity = '1';
+    wrap.style.transform = 'translateY(0)';
 
     setTimeout(() => {
       wrap.style.opacity = '0';
@@ -50,9 +50,7 @@
   const push = () => {
     if (current.length) {
       const cleaned = current.filter(l => !noiseRe.test(l));
-      if (cleaned.length) {
-        blocks.push(cleaned.join('   '));
-      }
+      if (cleaned.length) blocks.push(cleaned.join('   '));
       current = [];
     }
   };
