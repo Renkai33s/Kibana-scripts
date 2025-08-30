@@ -1,16 +1,15 @@
-(function(){
-
-  // --- Контейнер для уведомлений (унифицированный с Скриптом 1) ---
-  let notifContainer = document.getElementById("notif-container");
+(function () {
+  // --- Контейнер уведомлений ---
+  let notifContainer = document.getElementById("custom-notif-container");
   if (!notifContainer) {
     notifContainer = document.createElement("div");
-    notifContainer.id = "notif-container";
+    notifContainer.id = "custom-notif-container";
     notifContainer.style.position = "fixed";
     notifContainer.style.bottom = "20px";
     notifContainer.style.right = "20px";
     notifContainer.style.display = "flex";
     notifContainer.style.flexDirection = "column";
-    notifContainer.style.gap = "10px";
+    notifContainer.style.gap = "8px";
     notifContainer.style.zIndex = 999999;
     document.body.appendChild(notifContainer);
   }
@@ -26,72 +25,64 @@
     div.style.fontFamily = "sans-serif";
     div.style.fontSize = "14px";
     div.style.opacity = "0";
-    div.style.transform = "translateY(20px)";
+    div.style.transform = "translateY(-20px)";
     div.style.transition = "all 0.3s ease";
 
-    notifContainer.appendChild(div);
+    notifContainer.prepend(div);
 
-    // плавное появление
     requestAnimationFrame(() => {
       div.style.opacity = "1";
       div.style.transform = "translateY(0)";
     });
 
-    // плавное скрытие
     setTimeout(() => {
       div.style.opacity = "0";
-      div.style.transform = "translateY(20px)";
+      div.style.transform = "translateY(-20px)";
       setTimeout(() => div.remove(), 300);
     }, 2000);
   }
-  function showError(msg){ showMessage(msg, true, false); }
-  function showSuccess(msg){ showMessage(msg, false, true); }
 
-  // --- Основная логика: проверка выделения и копирование ---
-  try {
-    const sel = window.getSelection().toString().trim();
-    if (!sel) {
-      showError("Логи не выделены");
-      return;
-    }
-
-    // Обработка выделенных строк (как раньше: группировка по дате + фильтр "шума")
-    const lines = sel.split('\n').map(l => l.trim()).filter(Boolean);
-    const dateRe = /^[A-Z][a-z]{2} \d{1,2}, \d{4} @/;
-    const noiseRe = /^(INFO|DEBUG|WARN|WARNING|ERROR|TRACE|-|–|—)$/i;
-
-    const blocks = [];
-    let current = [];
-
-    const push = () => {
-      if (current.length) {
-        const cleaned = current.filter(l => !noiseRe.test(l));
-        if (cleaned.length) blocks.push(cleaned.join('   '));
-        current = [];
-      }
-    };
-
-    for (const line of lines) {
-      if (dateRe.test(line)) {
-        push();
-        current.push(line);
-      } else {
-        current.push(line);
-      }
-    }
-    push();
-
-    const out = blocks.join('\n');
-    if (!out) {
-      showError("Нет полезных логов для копирования");
-      return;
-    }
-
-    navigator.clipboard.writeText(out)
-      .then(() => showSuccess("Логи скопированы"))
-      .catch(() => showError("Что-то пошло не так"));
-  } catch (e) {
-    showError("Что-то пошло не так");
+  // --- Основная логика ---
+  const sel = window.getSelection().toString().trim();
+  if (!sel) {
+    showMessage("Логи не выделены", true);
+    return;
   }
 
+  const lines = sel.split("\n").map((l) => l.trim()).filter(Boolean);
+  const dateRe = /^[A-Z][a-z]{2} \d{1,2}, \d{4} @/;
+  const noiseRe = /^(INFO|DEBUG|WARN|WARNING|ERROR|TRACE|-|–|—)$/i;
+
+  const blocks = [];
+  let current = [];
+
+  const push = () => {
+    if (current.length) {
+      const cleaned = current.filter((l) => !noiseRe.test(l));
+      if (cleaned.length) {
+        blocks.push(cleaned.join("   "));
+      }
+      current = [];
+    }
+  };
+
+  for (const line of lines) {
+    if (dateRe.test(line)) {
+      push();
+      current.push(line);
+    } else {
+      current.push(line);
+    }
+  }
+  push();
+
+  const out = blocks.join("\n");
+  if (!out.trim()) {
+    showMessage("Логи не выделены", true);
+    return;
+  }
+
+  navigator.clipboard.writeText(out)
+    .then(() => showMessage("Логи скопированы", false, true))
+    .catch(() => showMessage("Что-то пошло не так", true));
 })();
