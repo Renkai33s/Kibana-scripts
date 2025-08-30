@@ -1,23 +1,6 @@
-javascript:(function(){
+(function(){
 
-  // --- UI: ошибки и прогресс ---
-  function showError(msg){
-    const wrap=document.createElement('div');
-    wrap.textContent=msg;
-    wrap.style.position='fixed';
-    wrap.style.bottom='20px';
-    wrap.style.right='20px';
-    wrap.style.padding='10px 15px';
-    wrap.style.borderRadius='8px';
-    wrap.style.background='#ff4d4f';
-    wrap.style.color='white';
-    wrap.style.fontFamily='sans-serif';
-    wrap.style.fontSize='14px';
-    wrap.style.zIndex=999999;
-    document.body.appendChild(wrap);
-    setTimeout(()=>wrap.remove(),2000);
-  }
-
+  // --- UI: прогресс и ошибки ---
   function showProgress(){
     const wrap=document.createElement('div');
     wrap.style.position='fixed';
@@ -58,30 +41,63 @@ javascript:(function(){
     }
   }
 
-  // --- XPath ---
-  function x(p){return document.evaluate(p,document,null,XPathResult.FIRST_ORDERED_NODE_TYPE,null).singleNodeValue;}
+  function showError(msg){
+    const wrap=document.createElement('div');
+    wrap.textContent=msg;
+    wrap.style.position='fixed';
+    wrap.style.bottom='20px';
+    wrap.style.right='20px';
+    wrap.style.padding='10px 15px';
+    wrap.style.borderRadius='8px';
+    wrap.style.background='#ff4d4f';
+    wrap.style.color='white';
+    wrap.style.fontFamily='sans-serif';
+    wrap.style.fontSize='14px';
+    wrap.style.zIndex=999999;
+    document.body.appendChild(wrap);
+    setTimeout(()=>wrap.remove(),2000);
+  }
 
-  const s=x('/html/body/div[1]/div/div/div/div[2]/div/div/div/div/div[2]/div/div/div');
+  function x(p){
+    return document.evaluate(p,document,null,XPathResult.FIRST_ORDERED_NODE_TYPE,null).singleNodeValue;
+  }
+
+  // --- Основные элементы ---
+  const s=x('/html/body/div[1]/div/div/div/div[2]/div/div/div/div/div[2]/div/div/div'); // скроллируемый контейнер
   if(!s){showError('Элемент для скролла не найден'); return;}
 
   const countXPath='/html/body/div[1]/div/div/div/div[2]/div/div/div/div/div[2]/div/div/div/div[2]/div[1]/div[1]/div[1]/div[1]/div/div/div[1]/div/strong';
   const tXPath='/html/body/div[1]/div/div/div/div[2]/div/div/div/div/div[2]/div/div/div/div[2]/div[2]/div/table';
-  const taXPath='/html/body/div[1]/div/div/div/div/div[2]/div/div/div/div/div[2]/div/div/div/div[1]/div[1]/div[1]/div/div[2]/div/textarea';
+  const taXPath='/html/body/div[1]/div/div/div/div[2]/div/div/div/div/div[2]/div/div/div/div[1]/div[1]/div[1]/div/div[2]/div/textarea';
   const bXPath='/html/body/div[1]/div/div/div/div[2]/div/div/div/div/div[2]/div/div/div/div[1]/div[1]/div[3]/div/div/div/div/div[2]/span/button';
 
+  // --- Условие: только если strong > 50 ---
   const cntEl=x(countXPath);
-  const cnt=cntEl?parseInt(cntEl.textContent.trim(),10):0;
+  let cnt=cntEl?parseInt(cntEl.textContent.trim(),10):0;
 
-  // --- Функция финальной обработки ---
-  function runAfterScroll(){
+  // --- Проверка таблицы и traceid перед любыми действиями ---
+  const table=x(tXPath);
+  if(!table){ showError('Таблица не найдена'); return; }
+  const headers=[...table.querySelectorAll('thead tr th')].map(th=>th.innerText.trim());
+  const traceIdx=headers.indexOf("message.traceid");
+  if(traceIdx===-1){ showError('Трейсы не найдены'); return; }
+
+  // --- Здесь прогресс создаем только если будем скроллить ---
+  let prog=null, step=0, prevRows=0, unchanged=0, stopRequested=false, timerID=null;
+
+  function getRowCount(){
     try{
       const table=x(tXPath);
-      if(!table){showError('Таблица не найдена'); return;}
+      if(!table)return 0;
+      return table.querySelectorAll('tbody tr').length;
+    }catch(e){
+      showError('Ошибка при подсчёте строк');
+      return 0;
+    }
+  }
 
-      const headers=[...table.querySelectorAll('thead tr th')].map(th=>th.innerText.trim());
-      const traceIdx=headers.indexOf("message.traceid");
-      if(traceIdx===-1){showError('Трейсы не найдены'); return;}
-
+  function runAfterScroll(){
+    try{
       let ids=[];
       table.querySelectorAll('tbody tr').forEach(tr=>{
         const v=tr.children[traceIdx]?.innerText.trim();
@@ -102,17 +118,15 @@ javascript:(function(){
       const b=x(bXPath);
       if(b) b.click();
 
-      s.scrollTop=0;
-      if(prog) prog.finish();
+      if(prog) { s.scrollTop=0; prog.finish(); }
     }catch(e){
       showError('Что-то пошло не так');
     }
   }
 
-  // --- Скролл ---
   function scrollLoop(){
     if(!s) return;
-    if(stopRequested){runAfterScroll(); return;}
+    if(stopRequested){ runAfterScroll(); return; }
 
     try{
       s.scrollTop=s.scrollHeight;
@@ -121,29 +135,31 @@ javascript:(function(){
 
       timerID=setTimeout(()=>{
         const rows=getRowCount();
-        if(rows>prevRows){prevRows=rows;unchanged=0;} else unchanged++;
-        if(unchanged<10 && !stopRequested){scrollLoop();}
-        else{runAfterScroll();}
+        if(rows>prevRows){prevRows=rows;unchanged=0;}
+        else unchanged++;
+
+        if(unchanged<10 && !stopRequested){
+          scrollLoop();
+        }else{
+          runAfterScroll();
+        }
       },100);
-    }catch(e){showError('Ошибка при скролле'); runAfterScroll();}
+    }catch(e){
+      showError('Ошибка при скролле');
+      runAfterScroll();
+    }
   }
 
-  function getRowCount(){
-    try{
-      const table=x(tXPath);
-      if(!table) return 0;
-      return table.querySelectorAll('tbody tr').length;
-    }catch(e){showError('Ошибка при подсчёте строк'); return 0;}
-  }
-
-  // --- Главная логика ---
-  let prog=null, step=0, prevRows=0, unchanged=0, stopRequested=false, timerID=null;
-
-  if(isNaN(cnt) || cnt <= 50){
+  // --- Запуск ---
+  if(isNaN(cnt)||cnt<=50){
     runAfterScroll();
-  } else {
-    prog=showProgress();
-    prog.stopButton.onclick=()=>{stopRequested=true; if(timerID) clearTimeout(timerID); runAfterScroll();};
+  }else{
+    prog = showProgress();
+    prog.stopButton.onclick = ()=>{
+      stopRequested=true;
+      if(timerID) clearTimeout(timerID);
+      runAfterScroll();
+    };
     scrollLoop();
   }
 
