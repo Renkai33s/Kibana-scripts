@@ -14,7 +14,6 @@
     document.body.appendChild(notifContainer);
   }
 
-  // --- Анимированное сообщение ---
   function showMessage(msg, isError = false, isSuccess = false) {
     const div = document.createElement("div");
     div.textContent = msg;
@@ -24,65 +23,56 @@
     div.style.color = "white";
     div.style.fontFamily = "sans-serif";
     div.style.fontSize = "14px";
+    div.style.overflow = "hidden";
+    div.style.maxHeight = "0";
     div.style.opacity = "0";
-    div.style.transform = "translateY(-20px)";
     div.style.transition = "all 0.3s ease";
 
     notifContainer.prepend(div);
 
     requestAnimationFrame(() => {
+      div.style.maxHeight = "100px";
       div.style.opacity = "1";
-      div.style.transform = "translateY(0)";
     });
 
     setTimeout(() => {
       div.style.opacity = "0";
-      div.style.transform = "translateY(-20px)";
+      div.style.maxHeight = "0";
       setTimeout(() => div.remove(), 300);
     }, 2000);
   }
 
-  // --- Основная логика ---
-  const sel = window.getSelection().toString().trim();
-  if (!sel) {
-    showMessage("Логи не выделены", true);
-    return;
-  }
+  function showError(msg) { showMessage(msg, true, false); }
+  function showSuccess(msg) { showMessage(msg, false, true); }
 
-  const lines = sel.split("\n").map((l) => l.trim()).filter(Boolean);
+  // --- Проверка выделения ---
+  const sel = window.getSelection().toString().trim();
+  if (!sel) { showError("Логи не выделены"); return; }
+
+  const lines = sel.split("\n").map(l => l.trim()).filter(Boolean);
   const dateRe = /^[A-Z][a-z]{2} \d{1,2}, \d{4} @/;
   const noiseRe = /^(INFO|DEBUG|WARN|WARNING|ERROR|TRACE|-|–|—)$/i;
 
   const blocks = [];
   let current = [];
-
   const push = () => {
     if (current.length) {
-      const cleaned = current.filter((l) => !noiseRe.test(l));
-      if (cleaned.length) {
-        blocks.push(cleaned.join("   "));
-      }
+      const cleaned = current.filter(l => !noiseRe.test(l));
+      if (cleaned.length) blocks.push(cleaned.join("   "));
       current = [];
     }
   };
 
   for (const line of lines) {
-    if (dateRe.test(line)) {
-      push();
-      current.push(line);
-    } else {
-      current.push(line);
-    }
+    if (dateRe.test(line)) { push(); current.push(line); } else { current.push(line); }
   }
   push();
 
   const out = blocks.join("\n");
-  if (!out.trim()) {
-    showMessage("Логи не выделены", true);
-    return;
-  }
+  if (!out.trim()) { showError("Логи не выделены"); return; }
 
   navigator.clipboard.writeText(out)
-    .then(() => showMessage("Логи скопированы", false, true))
-    .catch(() => showMessage("Что-то пошло не так", true));
+    .then(() => showSuccess("Логи скопированы"))
+    .catch(() => showError("Что-то пошло не так"));
+
 })();
