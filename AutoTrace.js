@@ -30,21 +30,16 @@
     div.style.transition = "all 0.3s ease";
 
     notifContainer.appendChild(div);
-
-    // плавное появление
     requestAnimationFrame(() => {
       div.style.opacity = "1";
       div.style.transform = "translateY(0)";
     });
-
-    // плавное скрытие
     setTimeout(() => {
       div.style.opacity = "0";
       div.style.transform = "translateY(20px)";
       setTimeout(() => div.remove(), 300);
     }, 2000);
   }
-
   function showError(msg){ showMessage(msg, true, false); }
 
   // --- Прогресс ---
@@ -79,35 +74,40 @@
     wrap.appendChild(btn);
 
     notifContainer.appendChild(wrap);
-
     requestAnimationFrame(()=>{
       wrap.style.opacity="1";
       wrap.style.transform="translateY(0)";
     });
 
     return {
-      update:function(step){label.textContent=step+' скроллов';},
+      update:function(step){ label.textContent = step + ' скроллов'; },
       stopButton:btn,
-      wrap:wrap
+      wrap
     }
   }
 
+  // --- helpers ---
   function x(p){
     return document.evaluate(p,document,null,XPathResult.FIRST_ORDERED_NODE_TYPE,null).singleNodeValue;
+  }
+  function parseIntSafe(text){
+    const digits = (text || '').replace(/[^\d]/g, ''); // вырезаем всё, кроме цифр (в т.ч. неразрывные пробелы)
+    return digits ? Number(digits) : null;
   }
 
   // --- Основные элементы ---
   const s=x('/html/body/div[1]/div/div/div/div[2]/div/div/div/div/div[2]/div/div/div'); 
-  if(!s){showError('Элемент для скролла не найден'); return;}
+  if(!s){ showError('Элемент для скролла не найден'); return; }
 
   const countXPath='/html/body/div[1]/div/div/div/div[2]/div/div/div/div/div[2]/div/div/div/div[2]/div[1]/div[1]/div[1]/div[1]/div/div/div[1]/div/strong';
   const tXPath='/html/body/div[1]/div/div/div/div[2]/div/div/div/div/div[2]/div/div/div/div[2]/div[2]/div/table';
   const taXPath='/html/body/div[1]/div/div/div/div[2]/div/div/div/div/div[2]/div/div/div/div[1]/div[1]/div[1]/div/div[2]/div/textarea';
   const bXPath='/html/body/div[1]/div/div/div/div[2]/div/div/div/div/div[2]/div/div/div/div[1]/div[1]/div[3]/div/div/div/div/div[2]/span/button';
 
-  // --- Условие: только если strong > 50 ---
-  const cntEl=x(countXPath);
-  let cnt=cntEl?parseInt(cntEl.textContent.trim(),10):0;
+  // --- Условие: скроллим если > 50; при неудачном парсинге — скроллим по умолчанию ---
+  const cntEl = x(countXPath);
+  const cntParsed = cntEl ? parseIntSafe(cntEl.textContent) : null;
+  const shouldScroll = (cntParsed === null) ? true : (cntParsed > 50);
 
   // --- Проверка таблицы и traceid ---
   const table=x(tXPath);
@@ -121,9 +121,9 @@
 
   function getRowCount(){
     try{
-      const table=x(tXPath);
-      if(!table)return 0;
-      return table.querySelectorAll('tbody tr').length;
+      const t=x(tXPath);
+      if(!t) return 0;
+      return t.querySelectorAll('tbody tr').length;
     }catch(e){
       showError('Ошибка при подсчёте строк');
       return 0;
@@ -143,7 +143,7 @@
 
       const ta=x(taXPath);
       if(ta){
-        let setter=Object.getOwnPropertyDescriptor(window.HTMLTextAreaElement.prototype,"value").set;
+        const setter=Object.getOwnPropertyDescriptor(window.HTMLTextAreaElement.prototype,"value").set;
         setter.call(ta,txt);
         ta.dispatchEvent(new Event("input",{bubbles:true}));
         ta.dispatchEvent(new Event("change",{bubbles:true}));
@@ -152,13 +152,14 @@
       const b=x(bXPath);
       if(b) b.click();
 
-      // Убираем прогресс
+      // убираем прогресс, если висит
       if(prog && prog.wrap){
         prog.wrap.remove();
         prog=null;
       }
 
       showMessage('Трейсы подставлены', false, true);
+
     }catch(e){
       showError('Что-то пошло не так');
     }
@@ -169,21 +170,21 @@
     if(stopRequested){ runAfterScroll(); return; }
 
     try{
-      s.scrollTop=s.scrollHeight;
+      s.scrollTop = s.scrollHeight;
       step++;
-      prog.update(step);
+      if(prog) prog.update(step);
 
-      timerID=setTimeout(()=>{
-        const rows=getRowCount();
-        if(rows>prevRows){prevRows=rows;unchanged=0;}
-        else unchanged++;
+      timerID = setTimeout(()=>{
+        const rows = getRowCount();
+        if(rows > prevRows){ prevRows = rows; unchanged = 0; }
+        else { unchanged++; }
 
-        if(unchanged<10 && !stopRequested){
+        if(unchanged < 10 && !stopRequested){
           scrollLoop();
-        }else{
+        } else {
           runAfterScroll();
         }
-      },100);
+      }, 100);
     }catch(e){
       showError('Ошибка при скролле');
       runAfterScroll();
@@ -191,12 +192,13 @@
   }
 
   // --- Запуск ---
-  if(isNaN(cnt)||cnt<=50){
+  if(!shouldScroll){
+    // мало записей — скролл не нужен
     runAfterScroll();
-  }else{
+  } else {
     prog = showProgress();
     prog.stopButton.onclick = ()=>{
-      stopRequested=true;
+      stopRequested = true;
       if(timerID) clearTimeout(timerID);
       runAfterScroll();
     };
