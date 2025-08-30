@@ -97,17 +97,22 @@
   function runAfterScroll(){
     try{
       const table=x(tXPath);
-      let ids=[];
-      if(table){
-        const h=[...table.querySelectorAll('thead tr th')].map(th=>th.innerText.trim());
-        const i=h.indexOf("message.traceid");
-        if(i!==-1){
-          table.querySelectorAll('tbody tr').forEach(tr=>{
-            const v=tr.children[i]?.innerText.trim();
-            if(v&&v!=="-") ids.push(v);
-          });
-        }
+      if(!table){showError('Таблица не найдена'); return;}
+
+      const headers=[...table.querySelectorAll('thead tr th')].map(th=>th.innerText.trim());
+      const traceIdx=headers.indexOf("message.traceid");
+
+      // --- Новое условие: если нет message.traceid ---
+      if(traceIdx===-1){
+        showError('Трейсы не найдены');
+        return;
       }
+
+      let ids=[];
+      table.querySelectorAll('tbody tr').forEach(tr=>{
+        const v=tr.children[traceIdx]?.innerText.trim();
+        if(v && v!=="-") ids.push(v);
+      });
 
       ids=[...new Set(ids)];
       const txt="("+ids.map(v=>'"'+v+'"').join(" ")+")";
@@ -121,7 +126,7 @@
       }
 
       const b=x(bXPath);
-      if(b)b.click();
+      if(b) b.click();
 
       s.scrollTop=0;
       prog.finish();
