@@ -10,13 +10,13 @@
     notifContainer.style.right = "20px";
     notifContainer.style.display = "flex";
     notifContainer.style.flexDirection = "column";
-    notifContainer.style.gap = "10px";
     notifContainer.style.zIndex = 999999;
     document.body.appendChild(notifContainer);
   }
 
-  // --- Анимированное сообщение ---
+  let currentNotif = null;
   function showMessage(msg, isError = false, isSuccess = false) {
+    if (currentNotif) currentNotif.remove();
     const div = document.createElement("div");
     div.textContent = msg;
     div.style.padding = "10px 15px";
@@ -25,21 +25,13 @@
     div.style.color = "white";
     div.style.fontFamily = "sans-serif";
     div.style.fontSize = "14px";
-    div.style.opacity = "0";
-    div.style.transform = "translateY(20px)";
-    div.style.transition = "all 0.3s ease";
-
     notifContainer.appendChild(div);
-
-    requestAnimationFrame(() => {
-      div.style.opacity = "1";
-      div.style.transform = "translateY(0)";
-    });
-
+    currentNotif = div;
     setTimeout(() => {
-      div.style.opacity = "0";
-      div.style.transform = "translateY(20px)";
-      setTimeout(() => div.remove(), 300);
+      if (currentNotif === div) {
+        div.remove();
+        currentNotif = null;
+      }
     }, 2000);
   }
   function showError(msg){ showMessage(msg, true, false); }
@@ -83,7 +75,6 @@
     wrap.style.display='flex';
     wrap.style.alignItems='center';
     wrap.style.gap='8px';
-    wrap.style.transition='opacity 0.3s ease';
 
     const label=document.createElement('div');
     label.textContent='0 скроллов';
@@ -104,7 +95,7 @@
 
     return {
       update:function(step){label.textContent=step+' скроллов';},
-      remove:function(){ wrap.style.opacity='0'; setTimeout(()=>wrap.remove(),300); },
+      remove:function(){ wrap.remove(); },
       stopButton:btn
     }
   }
