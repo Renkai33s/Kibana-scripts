@@ -35,8 +35,17 @@
   function showError(msg){ showMessage(msg,true,false); }
   function showSuccess(msg){ showMessage(msg,false,true); }
 
+  // --- Удаление savedSearch рекурсивно ---
+  function removeSavedSearch(obj){
+    if(typeof obj !== 'object' || !obj) return;
+    if('savedSearch' in obj) delete obj.savedSearch;
+    Object.values(obj).forEach(removeSavedSearch);
+  }
+
   // --- Основная логика ---
   try {
+    if(!window.rison) throw new Error("RISON не найден. Kibana должен грузить rison.js");
+
     let url = window.location.href;
     let [base, query] = url.split('?');
     if(!query) throw new Error("Нет параметров URL");
@@ -45,34 +54,28 @@
     let params = {};
     query.split('&').forEach(p => { let [k,v] = p.split('='); params[k] = decodeURIComponent(v || ''); });
 
-    // Функция рекурсивного удаления savedSearch
-    function removeSavedSearch(obj) {
-      if (typeof obj !== 'object' || !obj) return;
-      if ('savedSearch' in obj) delete obj.savedSearch;
-      Object.values(obj).forEach(removeSavedSearch);
+    // Обрабатываем _a
+    if(params['_a']){
+      let aObj = window.rison.decode(params['_a']);
+      removeSavedSearch(aObj);
+      params['_a'] = window.rison.encode(aObj);
     }
 
-    // Проверка RISON (используем rison.js)
-    if (params['_a']) {
-      // RISON-декодирование
-      let aObj = window.rison ? window.rison.decode(params['_a']) : null;
-      if(aObj) {
-        removeSavedSearch(aObj);
-        params['_a'] = window.rison.encode(aObj);
-      } else {
-        showError("RISON не найден. savedSearch не удалён.");
-      }
+    // Обрабатываем _q (если есть)
+    if(params['_q']){
+      let qObj = window.rison.decode(params['_q']);
+      removeSavedSearch(qObj);
+      params['_q'] = window.rison.encode(qObj);
     }
 
     // Собираем новый URL
     let newQuery = Object.entries(params).map(([k,v]) => `${k}=${encodeURIComponent(v)}`).join('&');
     let cleanUrl = `${base}?${newQuery}`;
 
-    // Перезаписываем текущее окно
     showSuccess("Перезагружаю Kibana без savedSearch...");
     window.location.replace(cleanUrl);
 
-  } catch(e) {
+  } catch(e){
     showError("Ошибка: "+e.message);
   }
 
