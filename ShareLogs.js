@@ -1,29 +1,32 @@
 (function() {
-    // Получаем текущий hash (всё после #)
     let hash = window.location.hash;
 
-    if (hash.includes('_a=')) {
-        // Находим и декодируем параметр _a
-        const hashParts = hash.split('&');
-        const newHashParts = hashParts.map(part => {
-            if (part.startsWith('_a=')) {
-                let value = part.substring(3); // убираем "_a="
-                try {
-                    let decoded = decodeURIComponent(value);
-                    // Убираем savedSearch:'...'
-                    decoded = decoded.replace(/,?savedSearch:'[^']*'/, '');
-                    return '_a=' + encodeURIComponent(decoded);
-                } catch (e) {
-                    console.error('Ошибка при декодировании _a:', e);
-                    return part;
-                }
-            }
-            return part;
-        });
+    if (!hash.includes('_a=')) return;
 
-        // Обновляем hash и инициируем переход
-        window.location.hash = newHashParts.join('&');
-    } else {
-        console.log('_a параметр не найден в hash');
+    // Функция для безопасного удаления savedSearch внутри discover:(...)
+    function removeSavedSearch(aParam) {
+        try {
+            let decoded = decodeURIComponent(aParam);
+
+            // Находим discover:(...) и удаляем savedSearch:'...'
+            decoded = decoded.replace(/(discover:\([^\)]*)savedSearch:'[^']*',?/g, '$1');
+
+            return encodeURIComponent(decoded);
+        } catch (e) {
+            console.error('Ошибка при обработке _a:', e);
+            return aParam;
+        }
     }
+
+    // Разбиваем hash на части по &
+    const parts = hash.split('&');
+    const newParts = parts.map(part => {
+        if (part.startsWith('_a=')) {
+            return '_a=' + removeSavedSearch(part.substring(3));
+        }
+        return part;
+    });
+
+    // Обновляем hash без трогания остальных параметров
+    window.location.hash = newParts.join('&');
 })();
