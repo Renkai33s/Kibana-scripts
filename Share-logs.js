@@ -42,83 +42,55 @@ javascript:(function(){
 
     function showError(msg){ showMessage(msg, true, false); }
     function showSuccess(msg){ showMessage(msg, false, true); }
-    function showInfo(msg){ showMessage(msg, false, false); }
 
-    // --- Обработка перезагрузки ---
-    var url = window.location.href;
-    var newUrl = url.replace(/,savedSearch:'[^']*'/, '');
-    if(newUrl !== url){
-        history.replaceState(null, '', newUrl);
-        showInfo('Нажми ещё раз для копирования ссылки'); // <-- уведомление при первой загрузке
-        sessionStorage.setItem('clickShare', 'true');
-        window.location.reload();
-        return;
+    // --- Основная логика ---
+    function clickShortUrlSwitch() {
+        return new Promise(function(resolve){
+            const switchBtn = document.querySelector('button[data-test-subj="useShortUrl"]');
+            if (!switchBtn) {
+                showError('Кнопка Short URL не найдена');
+                resolve();
+                return;
+            }
+            if (switchBtn.getAttribute('aria-checked') === 'true') {
+                resolve();
+                return;
+            }
+            switchBtn.click();
+            const interval = setInterval(function(){
+                if (switchBtn.getAttribute('aria-checked') === 'true') {
+                    clearInterval(interval);
+                    resolve();
+                }
+            }, 50);
+        });
     }
 
-    // --- Действия после перезагрузки ---
-    if(sessionStorage.getItem('clickShare') === 'true'){
-        sessionStorage.removeItem('clickShare');
-
-        var shareBtn = null;
-        var findShareBtn = function(){
-            var buttons = document.querySelectorAll('button, a');
-            for(var i=0;i<buttons.length;i++){
-                if(buttons[i].innerText.trim() === 'Share'){
-                    shareBtn = buttons[i];
-                    return true;
-                }
-            }
-            return false;
-        };
-
-        var clickShortUrlSwitch = function(){
-            return new Promise(function(resolve){
-                var switchBtn = document.querySelector('button[data-test-subj="useShortUrl"]');
-                if(!switchBtn){
-                    showError('Кнопка Short URL не найдена');
-                    resolve();
-                    return;
-                }
-                if(switchBtn.getAttribute('aria-checked') === 'true'){
-                    resolve();
-                    return;
-                }
-                switchBtn.click();
-                var interval = setInterval(function(){
-                    if(switchBtn.getAttribute('aria-checked') === 'true'){
-                        clearInterval(interval);
-                        resolve();
-                    }
-                }, 50);
-            });
-        };
-
-        var clickCopyLink = function(){
-            var copyBtn = document.querySelector('button[data-test-subj="copyShareUrlButton"]');
-            if(copyBtn){
-                copyBtn.click();
-                showSuccess("Ссылка скопирована!");
-            } else {
-                showError("Кнопка Copy Link не найдена");
-            }
-        };
-
-        var interval = setInterval(function(){
-            if(findShareBtn()){
-                clearInterval(interval);
-                try {
-                    shareBtn.click(); // открыть Share
-                    setTimeout(async function(){
-                        await clickShortUrlSwitch();
-                        clickCopyLink();
-                        setTimeout(function(){
-                            shareBtn.click(); // закрыть Share
-                        }, 200);
-                    }, 300);
-                } catch(e){
-                    showError("Не удалось выполнить действия: " + e.message);
-                }
-            }
-        }, 500);
+    function clickCopyLink() {
+        const copyBtn = document.querySelector('button[data-test-subj="copyShareUrlButton"]');
+        if(copyBtn){
+            copyBtn.click();
+            showSuccess("Ссылка скопирована!");
+        } else {
+            showError("Кнопка Copy Link не найдена");
+        }
     }
+
+    function openAndCopyShare() {
+        const shareBtn = document.querySelector('button[data-test-subj="shareContextMenuButton"]');
+        if(!shareBtn){
+            showError('Кнопка Share не найдена');
+            return;
+        }
+        shareBtn.click();
+        setTimeout(async function(){
+            await clickShortUrlSwitch();
+            clickCopyLink();
+            setTimeout(function(){
+                shareBtn.click(); // закрыть меню Share
+            }, 200);
+        }, 300);
+    }
+
+    openAndCopyShare();
 })();
