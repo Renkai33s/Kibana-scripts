@@ -1,9 +1,8 @@
 javascript:(function(){
-    // Скопировать текущий URL в буфер
-    navigator.clipboard.writeText(window.location.href)
-        .then(() => {
-            // Открыть новое окно с нужным адресом
-            window.open('https://s.yooteam.ru', '_blank');
-        })
-        .catch(err => alert('Ошибка при копировании ссылки: ' + err));
+    var url = window.location.href;
+    var newUrl = url.replace(/,savedSearch:'[^']*'/, '');
+    if(newUrl !== url){
+        history.replaceState(null, '', newUrl);
+        window.location.reload();
+    }
 })();
