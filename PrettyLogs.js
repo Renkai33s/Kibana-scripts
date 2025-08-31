@@ -62,7 +62,7 @@
     const push = () => {
       if (current.length) {
         const cleaned = current.filter(l => !noiseRe.test(l));
-        if (cleaned.length) blocks.push(cleaned.join('   '));
+        if (cleaned.length) blocks.push(cleaned.join(' '));
         current = [];
       }
     };
