@@ -1,31 +1,29 @@
 (function() {
-    // Получаем текущий URL
-    const currentUrl = window.location.href;
+    // Получаем текущий hash (всё после #)
+    let hash = window.location.hash;
 
-    // Создаём объект URL
-    const url = new URL(currentUrl);
+    if (hash.includes('_a=')) {
+        // Находим и декодируем параметр _a
+        const hashParts = hash.split('&');
+        const newHashParts = hashParts.map(part => {
+            if (part.startsWith('_a=')) {
+                let value = part.substring(3); // убираем "_a="
+                try {
+                    let decoded = decodeURIComponent(value);
+                    // Убираем savedSearch:'...'
+                    decoded = decoded.replace(/,?savedSearch:'[^']*'/, '');
+                    return '_a=' + encodeURIComponent(decoded);
+                } catch (e) {
+                    console.error('Ошибка при декодировании _a:', e);
+                    return part;
+                }
+            }
+            return part;
+        });
 
-    // Получаем параметры _a
-    let _a = url.searchParams.get('_a');
-
-    if (_a) {
-        try {
-            // Декодируем _a
-            let decoded = decodeURIComponent(_a);
-
-            // Используем регулярное выражение, чтобы удалить savedSearch и её значение
-            // Удаляет pattern вида savedSearch:'...'
-            decoded = decoded.replace(/,?savedSearch:'[^']*'/, '');
-
-            // Кодируем обратно
-            url.searchParams.set('_a', encodeURIComponent(decoded));
-
-            // Переходим по обновлённому URL
-            window.location.href = url.toString();
-        } catch (e) {
-            console.error('Ошибка при обработке _a:', e);
-        }
+        // Обновляем hash и инициируем переход
+        window.location.hash = newHashParts.join('&');
     } else {
-        console.log('Параметр _a не найден в URL');
+        console.log('_a параметр не найден в hash');
     }
 })();
