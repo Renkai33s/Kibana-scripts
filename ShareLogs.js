@@ -47,7 +47,7 @@
   // --- Основная логика ---
   try {
     let url = window.location.href;
-    
+
     // Разделяем base и query
     let [base, query] = url.split('?');
     if(!query) throw new Error("Нет параметров URL");
@@ -65,44 +65,20 @@
       params['_a'] = encodeURIComponent(params['_a']);
     }
 
-    // Собираем новый URL
+    // Собираем чистый URL
     let cleanUrl = `${base}?${Object.entries(params).map(([k,v]) => `${k}=${v}`).join('&')}`;
 
-    // --- Эмуляция вставки ссылки в shlink-ui ---
-    let iframe = document.createElement('iframe');
-    iframe.style.display = 'none';
-    iframe.src = 'https://shlink-ui.yooteam.ru/';
-    document.body.appendChild(iframe);
+    // Открываем shlink-ui в скрытой вкладке
+    let shlinkUrl = "https://shlink-ui.yooteam.ru/?longURL=" + encodeURIComponent(cleanUrl);
+    let win = window.open(shlinkUrl, "_blank", "width=1,height=1,left=-1000,top=-1000");
 
-    iframe.onload = function() {
-      try {
-        let doc = iframe.contentDocument || iframe.contentWindow.document;
-        let input = doc.querySelector('#longURL');
-        let btn = doc.querySelector('#btn');
-        let shortInput = doc.querySelector('#shortURL');
-
-        if (!input || !btn || !shortInput) {
-          showError('Не удалось найти элементы для сокращения ссылки');
-          return;
-        }
-
-        input.value = cleanUrl;      // вставляем ссылку
-        btn.click();                 // нажимаем сократить
-
-        // Ждём появления результата
-        let checkInterval = setInterval(() => {
-          if (shortInput.value && shortInput.value.startsWith('http')) {
-            clearInterval(checkInterval);
-            navigator.clipboard.writeText(shortInput.value)
-              .then(() => showSuccess('Сокращённая ссылка скопирована!'))
-              .catch(() => showError('Не удалось скопировать ссылку'));
-            document.body.removeChild(iframe);
-          }
-        }, 500);
-
-      } catch(e) {
-        showError('Ошибка при взаимодействии с shlink-ui');
-      }
+    if(win){
+      showSuccess("Вкладка для сокращения ссылки открыта");
+      setTimeout(() => {
+        try { win.close(); showMessage("Вкладка закрыта"); } catch(e){ }
+      }, 5000); // закрываем через 5 секунд
+    } else {
+      showError("Блокировка всплывающих окон. Разрешите pop-up");
     }
 
   } catch (e) {
