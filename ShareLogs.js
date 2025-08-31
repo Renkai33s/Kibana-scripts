@@ -3,30 +3,23 @@
 
     if (!hash.includes('_a=')) return;
 
-    // Функция для безопасного удаления savedSearch внутри discover:(...)
-    function removeSavedSearch(aParam) {
-        try {
-            let decoded = decodeURIComponent(aParam);
-
-            // Находим discover:(...) и удаляем savedSearch:'...'
-            decoded = decoded.replace(/(discover:\([^\)]*)savedSearch:'[^']*',?/g, '$1');
-
-            return encodeURIComponent(decoded);
-        } catch (e) {
-            console.error('Ошибка при обработке _a:', e);
-            return aParam;
-        }
-    }
-
-    // Разбиваем hash на части по &
     const parts = hash.split('&');
+
     const newParts = parts.map(part => {
         if (part.startsWith('_a=')) {
-            return '_a=' + removeSavedSearch(part.substring(3));
+            let decoded = decodeURIComponent(part.substring(3));
+
+            // ищем savedSearch:'...' и аккуратно убираем
+            decoded = decoded.replace(/(^|,)(savedSearch:'[^']*')(,?)/, (match, p1, p2, p3) => {
+                // если перед удаляемым элементом была запятая, оставляем только её, если она есть после — тоже убираем
+                if (p1 && p3) return ','; // удаляем внутренний элемент, оставляем запятую
+                return ''; // иначе просто удаляем
+            });
+
+            return '_a=' + encodeURIComponent(decoded);
         }
         return part;
     });
 
-    // Обновляем hash без трогания остальных параметров
     window.location.hash = newParts.join('&');
 })();
