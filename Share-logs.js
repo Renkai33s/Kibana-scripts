@@ -44,66 +44,56 @@ javascript:(function(){
     function showSuccess(msg){ showMessage(msg, false, true); }
 
     // --- Основная логика ---
-    function clickShortUrlSwitch() {
-        return new Promise(function(resolve){
-            const switchBtn = document.querySelector('button[data-test-subj="useShortUrl"]');
-            if (!switchBtn) {
-                showError('Кнопка Short URL не найдена');
-                resolve(false);
-                return;
-            }
-            if (switchBtn.getAttribute('aria-checked') === 'true') {
-                resolve(false); // уже включено
-                return;
-            }
-            switchBtn.click();
-            const interval = setInterval(function(){
-                if (switchBtn.getAttribute('aria-checked') === 'true') {
-                    clearInterval(interval);
-                    resolve(true);
-                }
+    function waitForElement(selector, timeout = 2000) {
+        return new Promise((resolve, reject) => {
+            const el = document.querySelector(selector);
+            if(el) return resolve(el);
+            let elapsed = 0;
+            const interval = setInterval(() => {
+                const e = document.querySelector(selector);
+                if(e) { clearInterval(interval); resolve(e); }
+                elapsed += 50;
+                if(elapsed >= timeout){ clearInterval(interval); reject(null); }
             }, 50);
-        });
-    }
-
-    function clickCopyLink() {
-        const copyBtn = document.querySelector('button[data-test-subj="copyShareUrlButton"]');
-        if(copyBtn){
-            copyBtn.click();
-            showSuccess("Ссылка скопирована!");
-        } else {
-            showError("Кнопка Copy Link не найдена");
-        }
-    }
-
-    function openShareMenu() {
-        return new Promise(function(resolve){
-            const shareBtn = document.querySelector('button[data-test-subj="shareContextMenuButton"]');
-            if(!shareBtn){
-                showError('Кнопка Share не найдена');
-                resolve(false);
-                return;
-            }
-            const menu = document.querySelector('div[data-test-subj="shareContextMenu"]');
-            if(menu) {
-                resolve(false); // меню уже открыто
-            } else {
-                shareBtn.click();
-                setTimeout(() => resolve(true), 300); // подождать открытия меню
-            }
         });
     }
 
     async function run() {
         try {
-            const menuOpened = await openShareMenu();
-            await clickShortUrlSwitch(); // включаем только если нужно
-            clickCopyLink();
-            // закрыть меню
+            // --- открыть меню, если оно закрыто ---
+            const menu = document.querySelector('div[data-test-subj="shareContextMenu"]');
+            if(!menu) {
+                const shareBtn = document.querySelector('button[data-test-subj="shareContextMenuButton"]');
+                if(!shareBtn){ showError('Кнопка Share не найдена'); return; }
+                shareBtn.click();
+                await new Promise(r => setTimeout(r, 300)); // подождать открытия меню
+            }
+
+            // --- включить Short URL если нужно ---
+            const switchBtn = await waitForElement('button[data-test-subj="useShortUrl"]');
+            if(switchBtn.getAttribute('aria-checked') === 'false') {
+                switchBtn.click();
+                await new Promise(r => {
+                    const interval = setInterval(() => {
+                        if(switchBtn.getAttribute('aria-checked') === 'true'){
+                            clearInterval(interval);
+                            r();
+                        }
+                    }, 50);
+                });
+            }
+
+            // --- кликнуть Copy Link ---
+            const copyBtn = await waitForElement('button[data-test-subj="copyShareUrlButton"]');
+            copyBtn.click();
+            showSuccess('Ссылка скопирована!');
+
+            // --- закрыть меню ---
             const shareBtn = document.querySelector('button[data-test-subj="shareContextMenuButton"]');
             if(shareBtn) shareBtn.click();
+
         } catch(e) {
-            showError('Ошибка при выполнении скрипта');
+            showError('Не удалось выполнить скрипт');
             console.error(e);
         }
     }
