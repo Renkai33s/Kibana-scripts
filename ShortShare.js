@@ -40,20 +40,19 @@
   function showError(msg){ showMessage(msg, true, false); }
   function showSuccess(msg){ showMessage(msg, false, true); }
 
-  // --- Основная логика ---
   try {
     const currentHost = location.hostname;
-    const params = new URLSearchParams(location.search);
 
     if (currentHost !== "shlink-ui.yooteam.ru") {
-      // мы на сторонней странице → пересылаем на сервис
-      const pageUrl = window.location.href;
-      location.href = "https://shlink-ui.yooteam.ru/?url=" + encodeURIComponent(pageUrl);
+      // Сохраняем текущий URL в sessionStorage
+      sessionStorage.setItem("__shlink_url", window.location.href);
+      // И переходим на сервис
+      location.href = "https://shlink-ui.yooteam.ru/";
       return;
     }
 
-    // мы уже на shlink-ui.yooteam.ru
-    const urlToShorten = params.get("url");
+    // Мы уже на shlink-ui.yooteam.ru
+    const urlToShorten = sessionStorage.getItem("__shlink_url");
     if (!urlToShorten) return;
 
     const input = document.evaluate(
