@@ -59,29 +59,51 @@
       params[k] = decodeURIComponent(v || '');
     });
 
-    // Если есть _a, убираем savedSearch
+    // Убираем savedSearch
     if(params['_a']){
       params['_a'] = params['_a'].replace(/savedSearch:'[^']*',?/,'');
       params['_a'] = encodeURIComponent(params['_a']);
     }
 
     // Собираем новый URL
-    let newQuery = Object.entries(params).map(([k,v]) => `${k}=${v}`).join('&');
-    let newUrl = `${base}?${newQuery}`;
+    let cleanUrl = `${base}?${Object.entries(params).map(([k,v]) => `${k}=${v}`).join('&')}`;
 
-    // Сокращаем ссылку через TinyURL
-    fetch('https://tinyurl.com/api-create.php?url=' + encodeURIComponent(newUrl))
-      .then(r => r.text())
-      .then(shortUrl => {
-        if(shortUrl && shortUrl.startsWith('http')){
-          navigator.clipboard.writeText(shortUrl)
-            .then(() => showSuccess("Сокращённая ссылка скопирована!"))
-            .catch(() => showError("Не удалось скопировать ссылку"));
-        } else {
-          showError("Не удалось сократить ссылку");
+    // --- Эмуляция вставки ссылки в shlink-ui ---
+    let iframe = document.createElement('iframe');
+    iframe.style.display = 'none';
+    iframe.src = 'https://shlink-ui.yooteam.ru/';
+    document.body.appendChild(iframe);
+
+    iframe.onload = function() {
+      try {
+        let doc = iframe.contentDocument || iframe.contentWindow.document;
+        let input = doc.querySelector('#longURL');
+        let btn = doc.querySelector('#btn');
+        let shortInput = doc.querySelector('#shortURL');
+
+        if (!input || !btn || !shortInput) {
+          showError('Не удалось найти элементы для сокращения ссылки');
+          return;
         }
-      })
-      .catch(() => showError("Не удалось сократить ссылку"));
+
+        input.value = cleanUrl;      // вставляем ссылку
+        btn.click();                 // нажимаем сократить
+
+        // Ждём появления результата
+        let checkInterval = setInterval(() => {
+          if (shortInput.value && shortInput.value.startsWith('http')) {
+            clearInterval(checkInterval);
+            navigator.clipboard.writeText(shortInput.value)
+              .then(() => showSuccess('Сокращённая ссылка скопирована!'))
+              .catch(() => showError('Не удалось скопировать ссылку'));
+            document.body.removeChild(iframe);
+          }
+        }, 500);
+
+      } catch(e) {
+        showError('Ошибка при взаимодействии с shlink-ui');
+      }
+    }
 
   } catch (e) {
     showError("Ошибка: " + e.message);
