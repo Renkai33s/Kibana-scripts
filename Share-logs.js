@@ -49,14 +49,15 @@ javascript:(function(){
     var newUrl = url.replace(/,savedSearch:'[^']*'/, '');
     if(newUrl !== url){
         history.replaceState(null, '', newUrl);
+        showInfo('Нажми ещё раз для копирования ссылки'); // <-- уведомление при первой загрузке
         sessionStorage.setItem('clickShare', 'true');
         window.location.reload();
         return;
     }
 
+    // --- Действия после перезагрузки ---
     if(sessionStorage.getItem('clickShare') === 'true'){
         sessionStorage.removeItem('clickShare');
-        showInfo('Нажми ещё раз для копирования ссылки');
 
         var shareBtn = null;
         var findShareBtn = function(){
