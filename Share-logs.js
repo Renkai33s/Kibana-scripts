@@ -42,7 +42,9 @@ javascript:(function(){
 
     function showError(msg){ showMessage(msg, true, false); }
     function showSuccess(msg){ showMessage(msg, false, true); }
+    function showInfo(msg){ showMessage(msg, false, false); }
 
+    // --- Обработка перезагрузки ---
     var url = window.location.href;
     var newUrl = url.replace(/,savedSearch:'[^']*'/, '');
     if(newUrl !== url){
@@ -54,6 +56,7 @@ javascript:(function(){
 
     if(sessionStorage.getItem('clickShare') === 'true'){
         sessionStorage.removeItem('clickShare');
+        showInfo('Нажми ещё раз для копирования ссылки');
 
         var shareBtn = null;
         var findShareBtn = function(){
