@@ -69,19 +69,9 @@
     let newQuery = Object.entries(params).map(([k,v]) => `${k}=${v}`).join('&');
     let newUrl = `${base}?${newQuery}`;
 
-    // Сокращаем ссылку через TinyURL
-    fetch('https://tinyurl.com/api-create.php?url=' + encodeURIComponent(newUrl))
-      .then(r => r.text())
-      .then(shortUrl => {
-        if(shortUrl && shortUrl.startsWith('http')){
-          navigator.clipboard.writeText(shortUrl)
-            .then(() => showSuccess("Сокращённая ссылка скопирована!"))
-            .catch(() => showError("Не удалось скопировать ссылку"));
-        } else {
-          showError("Не удалось сократить ссылку");
-        }
-      })
-      .catch(() => showError("Не удалось сократить ссылку"));
+    // Жёстко перезагружаем страницу
+    showSuccess("Открываю ссылку без savedSearch...");
+    setTimeout(() => { window.location.href = newUrl; }, 500);
 
   } catch (e) {
     showError("Ошибка: " + e.message);
