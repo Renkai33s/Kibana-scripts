@@ -47,7 +47,7 @@
   // --- Основная логика ---
   try {
     let url = window.location.href;
-
+    
     // Разделяем base и query
     let [base, query] = url.split('?');
     if(!query) throw new Error("Нет параметров URL");
@@ -59,28 +59,29 @@
       params[k] = decodeURIComponent(v || '');
     });
 
-    // Убираем savedSearch
+    // Если есть _a, убираем savedSearch
     if(params['_a']){
       params['_a'] = params['_a'].replace(/savedSearch:'[^']*',?/,'');
       params['_a'] = encodeURIComponent(params['_a']);
     }
 
-    // Собираем чистый URL
-    let cleanUrl = `${base}?${Object.entries(params).map(([k,v]) => `${k}=${v}`).join('&')}`;
+    // Собираем новый URL
+    let newQuery = Object.entries(params).map(([k,v]) => `${k}=${v}`).join('&');
+    let newUrl = `${base}?${newQuery}`;
 
-    // --- TinyURL API ---
-    fetch('https://tinyurl.com/api-create.php?url=' + encodeURIComponent(cleanUrl))
+    // Сокращаем ссылку через TinyURL
+    fetch('https://tinyurl.com/api-create.php?url=' + encodeURIComponent(newUrl))
       .then(r => r.text())
       .then(shortUrl => {
         if(shortUrl && shortUrl.startsWith('http')){
           navigator.clipboard.writeText(shortUrl)
-            .then(() => showSuccess('Сокращённая ссылка скопирована!'))
-            .catch(() => showError('Не удалось скопировать ссылку'));
+            .then(() => showSuccess("Сокращённая ссылка скопирована!"))
+            .catch(() => showError("Не удалось скопировать ссылку"));
         } else {
-          showError('Не удалось сократить ссылку');
+          showError("Не удалось сократить ссылку");
         }
       })
-      .catch(() => showError('Не удалось сократить ссылку'));
+      .catch(() => showError("Не удалось сократить ссылку"));
 
   } catch (e) {
     showError("Ошибка: " + e.message);
