@@ -1,55 +1,26 @@
 (function() {
-    try {
-        const origin = window.location.origin;
-        const hash = window.location.hash;
+    // Берём текущий URL
+    const currentUrl = window.location.href;
+    const url = new URL(currentUrl);
+    let hash = url.hash;
 
-        // Парсим _g, _q и _a
-        const gMatch = hash.match(/_g=([^&]+)/);
-        const qMatch = hash.match(/_q=([^&]+)/);
-        const aMatch = hash.match(/_a=([^&]+)/);
+    // Заменяем /view/<id> на /discover
+    hash = hash.replace(/\/view\/[0-9a-f\-]+/, '/discover');
 
-        if (!gMatch) {
-            alert('Не найден параметр _g в URL');
-            return;
-        }
-        const _g = gMatch[1];
+    // Убираем savedSearch внутри _a
+    hash = hash.replace(/savedSearch:'[0-9a-f\-]+'/, '');
 
-        let _aRaw = aMatch ? aMatch[1] : null;
-        let _qRaw = qMatch ? qMatch[1] : null;
+    // Обновляем хэш
+    url.hash = hash;
 
-        if (!_aRaw && !_qRaw) {
-            alert('Не найден параметр _a или _q в URL');
-            return;
-        }
+    // Копируем ссылку в буфер и выводим
+    const cleanedUrl = url.toString();
+    console.log('Чистая ссылка:', cleanedUrl);
 
-        // Декодируем _a или _q в объект
-        let _aObj;
-        try {
-            _aObj = _aRaw ? JSON.parse(decodeURIComponent(_aRaw)) : JSON.parse(decodeURIComponent(_qRaw));
-        } catch(e) {
-            alert('Ошибка декодирования _a/_q: ' + e);
-            return;
-        }
-
-        // Сохраняем indexPattern, если он есть в metadata
-        if (_aObj.metadata && _aObj.metadata.indexPattern) {
-            _aObj.metadata.indexPattern = _aObj.metadata.indexPattern;
-        }
-
-        // Сериализуем обратно
-        const _aFixed = encodeURIComponent(JSON.stringify(_aObj));
-
-        // Новый URL без saved search
-        const newUrl = `${origin}/app/data-explorer/discover#?_a=${_aFixed}&_g=${_g}&_q=${_aFixed}`;
-
-        // Копируем в буфер
-        navigator.clipboard.writeText(newUrl).then(() => {
-            alert('Новая ссылка скопирована в буфер:\n' + newUrl);
-        }).catch(err => {
-            alert('Ошибка копирования: ' + err);
-        });
-
-    } catch (e) {
-        alert('Ошибка: ' + e);
-    }
+    // Автокопирование в буфер обмена
+    navigator.clipboard.writeText(cleanedUrl).then(() => {
+        alert('Чистая ссылка скопирована в буфер!');
+    }).catch(() => {
+        alert('Ссылка: ' + cleanedUrl);
+    });
 })();
