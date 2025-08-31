@@ -46,16 +46,13 @@
   // --- Основная логика ---
   function run() {
     try {
-      const host = location.hostname;
-
-      if(host !== "shlink-ui.yooteam.ru"){
-        // мы на исходной странице → сохраняем URL и делаем редирект
+      if(location.hostname !== "shlink-ui.yooteam.ru"){
+        // редирект с сохранением URL
         sessionStorage.setItem("__shlink_url", window.location.href);
         location.href = "https://shlink-ui.yooteam.ru/#autoshare";
         return;
       }
 
-      // мы на shlink-ui.yooteam.ru
       const urlToShorten = sessionStorage.getItem("__shlink_url");
       if(!urlToShorten) return;
 
@@ -84,7 +81,7 @@
       ).singleNodeValue;
 
       if(!input || !genBtn || !copyBtn){
-        setTimeout(run, 300); // форма ещё не прогрузилась
+        setTimeout(run, 300); // ждём прогрузки формы
         return;
       }
 
@@ -106,7 +103,7 @@
         }catch(e){
           showError("Что-то пошло не так");
         }
-      },1000);
+      },1200);
 
     } catch(e){
       showError("Что-то пошло не так");
