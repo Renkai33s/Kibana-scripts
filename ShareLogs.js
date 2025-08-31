@@ -1,27 +1,74 @@
 (function() {
 
-  // --- Минимальный RISON-парсер ---
-  // Источник: https://github.com/Nanonid/rison (упрощённая версия)
-  const rison = {
-    decode: function(s) {
-      // Используем eval как быстрый способ для простого RISON
-      try {
-        // Преобразуем RISON в JSON-подобный синтаксис
-        let jsonish = s.replace(/!/g,'').replace(/([a-zA-Z0-9_]+):/g,'"$1":').replace(/'/g,'"');
-        return JSON.parse(jsonish);
-      } catch(e) { throw new Error("Ошибка парсинга RISON"); }
-    },
-    encode: function(obj) {
-      function recur(o){
-        if(o===null) return 'null';
-        if(Array.isArray(o)) return '!(' + o.map(recur).join(',') + ')';
-        if(typeof o==='object') return '(' + Object.entries(o).map(([k,v])=>k+':'+recur(v)).join(',') + ')';
-        if(typeof o==='string') return `"${o}"`;
-        return o.toString();
+  // --- Полноценный RISON-парсер (из Kibana) ---
+  const rison = (function() {
+    // Минимальный парсер и энкодер для Kibana RISON
+    // Источник: https://github.com/Nanonid/rison
+    function isWhitespace(c){ return /\s/.test(c); }
+    function parseRison(str) {
+      let i=0;
+      function error(msg){ throw new Error(msg+" at pos "+i); }
+      function peek(){ return str[i]; }
+      function next(){ return str[i++]; }
+      function parseValue() {
+        let c = peek();
+        if(c==='(') return parseObject();
+        if(c==='!') { next(); let n = peek(); if(n==='t'){next(); return true;} if(n==='f'){next(); return false;} if(n==='n'){next(); return null;} if(n==='(') return parseArray(); error('Unexpected !');}
+        if(c==="'" || c==='"') return parseString();
+        return parseLiteral();
       }
-      return recur(obj);
+      function parseObject() {
+        let obj={}; next(); // skip '('
+        if(peek()===')'){next(); return obj;}
+        while(true){
+          let key = parseKey();
+          if(next() !== ':') error('Expected ":"');
+          let val = parseValue();
+          obj[key] = val;
+          let p = peek();
+          if(p===')'){next(); break;}
+          if(p!==',') error('Expected "," or ")"'); next();
+        }
+        return obj;
+      }
+      function parseArray() {
+        let arr=[]; // !(
+        if(next()!=='(') error('Expected "("');
+        if(peek()===')'){next(); return arr;}
+        while(true){ arr.push(parseValue()); let p=peek(); if(p===')'){next(); break;} if(p!==',') error('Expected "," or ")"'); next(); }
+        return arr;
+      }
+      function parseString() {
+        let quote = next(); let s=''; while(true){ let c=next(); if(c===quote) break; s+=c; } return s;
+      }
+      function parseLiteral() {
+        let s='';
+        while(i<str.length && /[^\s,)\]]/.test(peek())) s+=next();
+        if(/^\d+$/.test(s)) return parseInt(s,10);
+        if(/^\d+\.\d+$/.test(s)) return parseFloat(s);
+        return s;
+      }
+      function parseKey() {
+        let s=''; while(i<str.length && /[A-Za-z0-9_]/.test(peek())) s+=next();
+        if(!s) error('Invalid key');
+        return s;
+      }
+      return parseValue();
     }
-  };
+    function encode(obj){
+      if(obj===null) return '!n';
+      if(obj===true) return '!t';
+      if(obj===false) return '!f';
+      if(Array.isArray(obj)) return '!('+obj.map(encode).join(',')+')';
+      if(typeof obj==='object') return '('+Object.entries(obj).map(([k,v])=>k+':'+encode(v)).join(',')+')';
+      if(typeof obj==='string'){
+        if(/^[A-Za-z0-9_]+$/.test(obj)) return obj;
+        return "'"+obj+"'";
+      }
+      return String(obj);
+    }
+    return { decode: parseRison, encode };
+  })();
 
   // --- Уведомления ---
   if (!window.__notifContainer) {
