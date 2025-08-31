@@ -14,35 +14,25 @@
     window.__currentNotif = null;
   }
 
-  function showMessage(msg, isError = false, isSuccess = false) {
-    if (window.__currentNotif) {
-      window.__currentNotif.remove();
-      window.__currentNotif = null;
-    }
+  function showMessage(msg, isError=false, isSuccess=false){
+    if(window.__currentNotif){ window.__currentNotif.remove(); window.__currentNotif=null; }
     const div = document.createElement("div");
     div.textContent = msg;
     div.style.padding = "10px 15px";
     div.style.borderRadius = "8px";
-    div.style.background = isError ? "#ff4d4f" : isSuccess ? "#52c41a" : "#3498db";
-    div.style.color = "white";
-    div.style.fontFamily = "sans-serif";
-    div.style.fontSize = "14px";
-    div.style.minWidth = "120px";
-    div.style.textAlign = "center";
-    div.style.boxShadow = "0 2px 6px rgba(0,0,0,0.2)";
+    div.style.background = isError?"#ff4d4f":isSuccess?"#52c41a":"#3498db";
+    div.style.color="white";
+    div.style.fontFamily="sans-serif";
+    div.style.fontSize="14px";
+    div.style.minWidth="120px";
+    div.style.textAlign="center";
+    div.style.boxShadow="0 2px 6px rgba(0,0,0,0.2)";
     window.__notifContainer.appendChild(div);
-    window.__currentNotif = div;
-
-    setTimeout(() => {
-      if (window.__currentNotif === div) {
-        div.remove();
-        window.__currentNotif = null;
-      }
-    }, 2000);
+    window.__currentNotif=div;
+    setTimeout(()=>{ if(window.__currentNotif===div){ div.remove(); window.__currentNotif=null; } },2000);
   }
-
-  function showError(msg){ showMessage(msg, true, false); }
-  function showSuccess(msg){ showMessage(msg, false, true); }
+  function showError(msg){ showMessage(msg,true,false); }
+  function showSuccess(msg){ showMessage(msg,false,true); }
 
   // --- Основная логика ---
   try {
@@ -54,37 +44,33 @@
 
     // Парсим параметры
     let params = {};
-    query.split('&').forEach(p => {
-      let [k,v] = p.split('=');
-      params[k] = decodeURIComponent(v || '');
-    });
+    query.split('&').forEach(p=>{ let [k,v]=p.split('='); params[k]=decodeURIComponent(v||''); });
 
-    // Если есть _a, убираем savedSearch
-    if(params['_a']){
-      params['_a'] = params['_a'].replace(/savedSearch:'[^']*',?/,'');
-      params['_a'] = encodeURIComponent(params['_a']);
-    }
+    // Убираем savedSearch из _a
+    if(params['_a']) params['_a'] = encodeURIComponent(params['_a'].replace(/savedSearch:'[^']*',?/,''));
 
-    // Собираем новый URL
-    let newQuery = Object.entries(params).map(([k,v]) => `${k}=${v}`).join('&');
-    let newUrl = `${base}?${newQuery}`;
+    // Собираем чистый URL Kibana
+    let newQuery = Object.entries(params).map(([k,v])=>`${k}=${v}`).join('&');
+    let cleanUrl = `${base}?${newQuery}`;
 
-    // Сокращаем ссылку через TinyURL
-    fetch('https://tinyurl.com/api-create.php?url=' + encodeURIComponent(newUrl))
-      .then(r => r.text())
-      .then(shortUrl => {
-        if(shortUrl && shortUrl.startsWith('http')){
-          navigator.clipboard.writeText(shortUrl)
-            .then(() => showSuccess("Сокращённая ссылка скопирована!"))
-            .catch(() => showError("Не удалось скопировать ссылку"));
-        } else {
-          showError("Не удалось сократить ссылку");
-        }
-      })
-      .catch(() => showError("Не удалось сократить ссылку"));
+    // Создаём невидимый iframe для “чистой загрузки”
+    let iframe = document.createElement('iframe');
+    iframe.style.width = '0';
+    iframe.style.height = '0';
+    iframe.style.border = '0';
+    iframe.style.visibility = 'hidden';
+    document.body.appendChild(iframe);
 
-  } catch (e) {
-    showError("Ошибка: " + e.message);
+    // Загружаем blank и потом редиректим
+    iframe.src = 'about:blank';
+    iframe.onload = () => {
+      showSuccess("Открываю Kibana без savedSearch в том же окне...");
+      iframe.contentWindow.location.replace(cleanUrl);
+      setTimeout(()=>{ document.body.removeChild(iframe); }, 3000);
+    };
+
+  } catch(e){
+    showError("Ошибка: "+e.message);
   }
 
 })();
