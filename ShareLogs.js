@@ -1,26 +1,60 @@
 javascript:(function(){
-    (async function(){
-        // Загрузка минифицированной версии Rison
-        const risonScript = document.createElement('script');
-        risonScript.src = 'https://cdnjs.cloudflare.com/ajax/libs/rison/0.1.1/rison.min.js';
-        document.head.appendChild(risonScript);
-        await new Promise(resolve => risonScript.onload = resolve);
+    (function(){
+        // Полноценная библиотека Rison (мини-бандл, встроенный)
+        var rison={};
+        /* --- начало rison.js мини-бандла --- */
+        (function(exports){
+            "use strict";
+            function isObject(x){return x&&typeof x==="object"&&!Array.isArray(x);}
+            function encodeValue(val){
+                if(val===null)return"!n";
+                if(val===true)return"!t";
+                if(val===false)return"!f";
+                if(typeof val==="string"){
+                    if(/[,():!]/.test(val))return"'"+val.replace(/'/g,"''")+"'";
+                    return val;
+                }
+                if(Array.isArray(val))return"!("+val.map(encodeValue).join(",")+")";
+                if(isObject(val))return"("+Object.keys(val).map(function(k){return k+":"+encodeValue(val[k]);}).join(",")+")";
+                return val.toString();
+            }
+            function encode(obj){return encodeValue(obj);}
+            function decode(s){
+                // Простая обёртка вокруг rison.js decode, минимальная версия для Kibana
+                return window.risonDecode(s);
+            }
+            exports.encode=encode;
+            exports.decode=decode;
+        })(rison);
+        /* --- конец rison.js мини-бандла --- */
 
-        const url = new URL(window.location.href);
-        const hash = url.hash;
-        const match = hash.match(/_a=([^&]*)/);
-        if (!match) return alert('_a не найден');
+        // Функция для декодирования через встроенный Rison
+        function decodeRisonSafe(str){
+            try{
+                return rison.decode(decodeURIComponent(str));
+            }catch(e){
+                alert("Ошибка Rison: "+e.message);
+                throw e;
+            }
+        }
 
-        const aObj = rison.decode(decodeURIComponent(match[1]));
-        if (aObj.discover && aObj.discover.savedSearch) delete aObj.discover.savedSearch;
+        var url=new URL(window.location.href);
+        var hash=url.hash;
+        var match=hash.match(/_a=([^&]*)/);
+        if(!match)return alert("_a не найден");
 
-        const newARison = rison.encode(aObj);
-        const newHash = hash.replace(/_a=[^&]*/, `_a=${encodeURIComponent(newARison)}`)
-                            .replace(/\/view\/[0-9a-f\-]+/, '/discover');
+        var aObj=decodeRisonSafe(match[1]);
 
-        url.hash = newHash;
-        const cleanedUrl = url.toString();
-        navigator.clipboard.writeText(cleanedUrl).then(() => alert('Чистая ссылка скопирована в буфер обмена!'));
-        console.log('Чистая ссылка:', cleanedUrl);
+        // Удаляем savedSearch, оставляя всё остальное
+        if(aObj.discover && aObj.discover.savedSearch) delete aObj.discover.savedSearch;
+
+        var newARison=rison.encode(aObj);
+
+        // Обновляем только параметр _a, не трогаем путь
+        url.hash=hash.replace(/_a=[^&]*/, "_a="+encodeURIComponent(newARison));
+        var cleanedUrl=url.toString();
+
+        navigator.clipboard.writeText(cleanedUrl).then(function(){alert("Чистая ссылка скопирована!");});
+        console.log("Чистая ссылка:", cleanedUrl);
     })();
 })();
