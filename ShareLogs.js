@@ -68,18 +68,19 @@
     // Собираем чистый URL
     let cleanUrl = `${base}?${Object.entries(params).map(([k,v]) => `${k}=${v}`).join('&')}`;
 
-    // Открываем shlink-ui в скрытой вкладке
-    let shlinkUrl = "https://shlink-ui.yooteam.ru/?longURL=" + encodeURIComponent(cleanUrl);
-    let win = window.open(shlinkUrl, "_blank", "width=1,height=1,left=-1000,top=-1000");
-
-    if(win){
-      showSuccess("Вкладка для сокращения ссылки открыта");
-      setTimeout(() => {
-        try { win.close(); showMessage("Вкладка закрыта"); } catch(e){ }
-      }, 5000); // закрываем через 5 секунд
-    } else {
-      showError("Блокировка всплывающих окон. Разрешите pop-up");
-    }
+    // --- TinyURL API ---
+    fetch('https://tinyurl.com/api-create.php?url=' + encodeURIComponent(cleanUrl))
+      .then(r => r.text())
+      .then(shortUrl => {
+        if(shortUrl && shortUrl.startsWith('http')){
+          navigator.clipboard.writeText(shortUrl)
+            .then(() => showSuccess('Сокращённая ссылка скопирована!'))
+            .catch(() => showError('Не удалось скопировать ссылку'));
+        } else {
+          showError('Не удалось сократить ссылку');
+        }
+      })
+      .catch(() => showError('Не удалось сократить ссылку'));
 
   } catch (e) {
     showError("Ошибка: " + e.message);
