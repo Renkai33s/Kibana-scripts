@@ -7,7 +7,6 @@
     container.style.position = "fixed";
     container.style.bottom = "20px";
     container.style.right = "20px";
-    container.style.width = "auto";
     container.style.zIndex = 999999;
     document.body.appendChild(container);
     window.__notifContainer = container;
@@ -45,25 +44,75 @@
   function showSuccess(msg){ showMessage(msg, false, true); }
 
   // --- Основная логика ---
-  try {
-    const url = window.location.href; // текущий URL
+  function run() {
+    try {
+      const host = location.hostname;
 
-    // TinyURL API
-    fetch('https://tinyurl.com/api-create.php?url=' + encodeURIComponent(url))
-      .then(r => r.text())
-      .then(shortUrl => {
-        if(shortUrl && shortUrl.startsWith('http')){
-          navigator.clipboard.writeText(shortUrl)
-            .then(() => showSuccess("Скопировано в буфер"))
-            .catch(() => showError("Что-то пошло не так"));
-        } else {
-          showError("Не удалось сократить ссылку");
+      if(host !== "shlink-ui.yooteam.ru"){
+        // мы на исходной странице → сохраняем URL и делаем редирект
+        sessionStorage.setItem("__shlink_url", window.location.href);
+        location.href = "https://shlink-ui.yooteam.ru/#autoshare";
+        return;
+      }
+
+      // мы на shlink-ui.yooteam.ru
+      const urlToShorten = sessionStorage.getItem("__shlink_url");
+      if(!urlToShorten) return;
+
+      const input = document.evaluate(
+        "/html/body/div/div/form/div[3]/input",
+        document,
+        null,
+        XPathResult.FIRST_ORDERED_NODE_TYPE,
+        null
+      ).singleNodeValue;
+
+      const genBtn = document.evaluate(
+        "/html/body/div/div/form/div[5]/button",
+        document,
+        null,
+        XPathResult.FIRST_ORDERED_NODE_TYPE,
+        null
+      ).singleNodeValue;
+
+      const copyBtn = document.evaluate(
+        "/html/body/div/div/form/div[4]/button",
+        document,
+        null,
+        XPathResult.FIRST_ORDERED_NODE_TYPE,
+        null
+      ).singleNodeValue;
+
+      if(!input || !genBtn || !copyBtn){
+        setTimeout(run, 300); // форма ещё не прогрузилась
+        return;
+      }
+
+      input.value = urlToShorten;
+      input.dispatchEvent(new Event("input",{bubbles:true}));
+      genBtn.click();
+
+      setTimeout(()=>{
+        try{
+          copyBtn.click();
+          const resultInput = document.querySelector("input[readonly]");
+          if(resultInput && resultInput.value){
+            navigator.clipboard.writeText(resultInput.value)
+              .then(()=>showSuccess("Скопировано в буфер"))
+              .catch(()=>showError("Что-то пошло не так"));
+          }else{
+            showError("Не удалось получить ссылку");
+          }
+        }catch(e){
+          showError("Что-то пошло не так");
         }
-      })
-      .catch(() => showError("Что-то пошло не так"));
+      },1000);
 
-  } catch (e) {
-    showError("Что-то пошло не так");
+    } catch(e){
+      showError("Что-то пошло не так");
+    }
   }
+
+  run();
 
 })();
