@@ -1,33 +1,28 @@
 (function() {
     try {
-        // Проверяем, что объект chrome или OpenSearch Dashboards API доступен
-        if (!window.kbn || !window.kbn.$rootScope) {
-            alert('Не найден объект kbn, страница еще не загружена полностью');
-            return;
-        }
-
-        // Получаем состояние приложения через Angular scope
-        const $rootScope = window.kbn.$rootScope;
-        const appState = $rootScope.$$childHead?.appState || $rootScope.appState;
-
-        if (!appState) {
-            alert('Не удалось получить состояние приложения');
-            return;
-        }
-
-        // Формируем объект _a (активные параметры) и _g (глобальные параметры)
-        const _a = appState._a || {};
-        const _g = appState._g || {};
-
-        // Формируем новый URL без saved search
+        const hash = window.location.hash; // берем хэш полностью
         const origin = window.location.origin;
-        const newUrl = `${origin}/app/data-explorer/discover#/?_g=${encodeURIComponent(JSON.stringify(_g))}&_a=${encodeURIComponent(JSON.stringify(_a))}`;
 
-        // Копируем в буфер обмена
+        // Ищем _g и _a или _q
+        const gMatch = hash.match(/_g=([^&]+)/);
+        const aMatch = hash.match(/_a=([^&]+)/) || hash.match(/_q=([^&]+)/);
+
+        if (!gMatch || !aMatch) {
+            alert('Не удалось найти параметры _g или _a/_q в URL');
+            return;
+        }
+
+        const _g = gMatch[1];
+        const _a = aMatch[1];
+
+        // Новый URL без view/<id>
+        const newUrl = `${origin}/app/data-explorer/discover#/?_g=${_g}&_a=${_a}`;
+
+        // Копируем в буфер
         navigator.clipboard.writeText(newUrl).then(() => {
-            alert('Новая ссылка скопирована в буфер обмена:\n' + newUrl);
+            alert('Новая ссылка скопирована в буфер:\n' + newUrl);
         }).catch(err => {
-            alert('Ошибка при копировании ссылки: ' + err);
+            alert('Ошибка копирования: ' + err);
         });
 
     } catch (e) {
