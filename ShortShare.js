@@ -1,6 +1,6 @@
 (function(){
 
-  // --- Глобальная система уведомлений ---
+  // --- Уведомления ---
   if (!window.__notifContainer) {
     const container = document.createElement("div");
     container.id = "notif-container";
@@ -46,15 +46,14 @@
 
   // --- Основная логика ---
   try {
-    const url = window.location.href; // берём текущий URL
+    const url = window.location.href; // текущий URL
 
-    // используем API shrtco.de для сокращения
-    fetch('https://api.shrtco.de/v2/shorten?url=' + encodeURIComponent(url))
-      .then(response => response.json())
-      .then(data => {
-        if(data.ok && data.result && data.result.full_short_link){
-          const shortUrl = data.result.full_short_link;
-          return navigator.clipboard.writeText(shortUrl)
+    // TinyURL API
+    fetch('https://tinyurl.com/api-create.php?url=' + encodeURIComponent(url))
+      .then(r => r.text())
+      .then(shortUrl => {
+        if(shortUrl && shortUrl.startsWith('http')){
+          navigator.clipboard.writeText(shortUrl)
             .then(() => showSuccess("Скопировано в буфер"))
             .catch(() => showError("Что-то пошло не так"));
         } else {
@@ -62,6 +61,7 @@
         }
       })
       .catch(() => showError("Что-то пошло не так"));
+
   } catch (e) {
     showError("Что-то пошло не так");
   }
