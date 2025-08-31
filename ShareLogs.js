@@ -1,6 +1,5 @@
 (function() {
     let hash = window.location.hash;
-
     if (!hash.includes('_a=')) return;
 
     const parts = hash.split('&');
@@ -9,11 +8,11 @@
         if (part.startsWith('_a=')) {
             let decoded = decodeURIComponent(part.substring(3));
 
-            // ищем savedSearch:'...' и аккуратно убираем
-            decoded = decoded.replace(/(^|,)(savedSearch:'[^']*')(,?)/, (match, p1, p2, p3) => {
-                // если перед удаляемым элементом была запятая, оставляем только её, если она есть после — тоже убираем
-                if (p1 && p3) return ','; // удаляем внутренний элемент, оставляем запятую
-                return ''; // иначе просто удаляем
+            // находим блок discover:(...)
+            decoded = decoded.replace(/discover:\((.*?)\)/, (match, inner) => {
+                // удаляем только savedSearch:'...' внутри discover
+                const newInner = inner.replace(/,?savedSearch:'[^']*'/, '');
+                return 'discover:(' + newInner + ')';
             });
 
             return '_a=' + encodeURIComponent(decoded);
