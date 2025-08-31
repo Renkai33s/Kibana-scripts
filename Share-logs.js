@@ -43,68 +43,86 @@ javascript:(function(){
     function showError(msg){ showMessage(msg, true, false); }
     function showSuccess(msg){ showMessage(msg, false, true); }
 
-    // --- Основная логика ---
-    function clickShortUrlSwitch() {
-        return new Promise(function(resolve){
-            const switchBtn = document.querySelector('button[data-test-subj="useShortUrl"]');
-            if (!switchBtn) {
-                showError('Кнопка Short URL не найдена');
-                resolve(false);
-                return;
-            }
-            if (switchBtn.getAttribute('aria-checked') === 'true') {
-                resolve(false); // Short URL уже включён
-                return;
-            }
-            switchBtn.click();
-            const interval = setInterval(function(){
-                if (switchBtn.getAttribute('aria-checked') === 'true') {
-                    clearInterval(interval);
-                    resolve(true);
+    // --- Шаг 0: обработка перезагрузки ---
+    var url = window.location.href;
+    var newUrl = url.replace(/,savedSearch:'[^']*'/, '');
+    var needReload = newUrl !== url;
+
+    function runShareFlow() {
+        var shareBtn = null;
+        var findShareBtn = function(){
+            var buttons = document.querySelectorAll('button, a');
+            for(var i=0;i<buttons.length;i++){
+                if(buttons[i].innerText.trim() === 'Share'){
+                    shareBtn = buttons[i];
+                    return true;
                 }
-            }, 50);
-        });
-    }
-
-    function clickCopyLink() {
-        const copyBtn = document.querySelector('button[data-test-subj="copyShareUrlButton"]');
-        if(copyBtn){
-            copyBtn.click();
-            showSuccess("Ссылка скопирована!");
-        } else {
-            showError("Кнопка Copy Link не найдена");
-        }
-    }
-
-    function openShareMenu() {
-        return new Promise(function(resolve){
-            const shareBtn = document.querySelector('button[data-test-subj="shareContextMenuButton"]');
-            if(!shareBtn){
-                showError('Кнопка Share не найдена');
-                resolve(false);
-                return;
             }
-            shareBtn.click();
-            setTimeout(()=>resolve(true), 300);
-        });
+            return false;
+        };
+
+        var clickShortUrlSwitch = function(){
+            return new Promise(function(resolve){
+                var switchBtn = document.querySelector('button[data-test-subj="useShortUrl"]');
+                if(!switchBtn){
+                    showError('Кнопка Short URL не найдена');
+                    resolve();
+                    return;
+                }
+                if(switchBtn.getAttribute('aria-checked') === 'true'){
+                    resolve();
+                    return;
+                }
+                switchBtn.click();
+                var interval = setInterval(function(){
+                    if(switchBtn.getAttribute('aria-checked') === 'true'){
+                        clearInterval(interval);
+                        resolve();
+                    }
+                }, 50);
+            });
+        };
+
+        var clickCopyLink = function(){
+            var copyBtn = document.querySelector('button[data-test-subj="copyShareUrlButton"]');
+            if(copyBtn){
+                copyBtn.click();
+                showSuccess("Ссылка скопирована!");
+            } else {
+                showError("Кнопка Copy Link не найдена");
+            }
+        };
+
+        var interval = setInterval(function(){
+            if(findShareBtn()){
+                clearInterval(interval);
+                try {
+                    shareBtn.click(); // открыть Share
+                    setTimeout(async function(){
+                        await clickShortUrlSwitch();
+                        clickCopyLink();
+                        setTimeout(function(){
+                            shareBtn.click(); // закрыть Share
+                        }, 200);
+                    }, 300);
+                } catch(e){
+                    showError("Не удалось выполнить действия: " + e.message);
+                }
+            }
+        }, 500);
     }
 
-    async function runScript(){
-        const menuOpened = await openShareMenu();
-        if(!menuOpened) return;
-
-        const switched = await clickShortUrlSwitch(); // включаем Short URL, если не включён
-        if(!switched) {
-            // Если Short URL уже был включён, просто ждем немного, чтобы меню загрузилось
-            await new Promise(r => setTimeout(r, 200));
-        }
-
-        clickCopyLink();
-
-        // Закрываем меню Share
-        const shareBtn = document.querySelector('button[data-test-subj="shareContextMenuButton"]');
-        if(shareBtn) shareBtn.click();
+    if(needReload){
+        sessionStorage.setItem('clickShare', 'true');
+        history.replaceState(null, '', newUrl);
+        window.location.reload();
+    } else {
+        runShareFlow();
     }
 
-    runScript();
+    if(sessionStorage.getItem('clickShare') === 'true'){
+        sessionStorage.removeItem('clickShare');
+        runShareFlow();
+    }
+
 })();
