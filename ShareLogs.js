@@ -1,31 +1,10 @@
 javascript:(function(){
     (async function(){
-        // Минимальная версия Rison (encode/decode)
-        const rison = {
-            decode: function(s){
-                s = decodeURIComponent(s);
-                if (s[0] === '(') s = s.slice(1, -1);
-                const obj = {};
-                s.split(',').forEach(function(pair){
-                    const [key, value] = pair.split(':');
-                    obj[key] = value === '!t' ? true : value === '!f' ? false : value === '!n' ? null : value;
-                });
-                return obj;
-            },
-            encode: function(obj){
-                const pairs = [];
-                for (const key in obj) {
-                    const value = obj[key];
-                    let encodedValue;
-                    if (value === true) encodedValue = '!t';
-                    else if (value === false) encodedValue = '!f';
-                    else if (value === null) encodedValue = '!n';
-                    else encodedValue = value;
-                    pairs.push(`${key}:${encodedValue}`);
-                }
-                return `(${pairs.join(',')})`;
-            }
-        };
+        // Загрузка минифицированной версии Rison
+        const risonScript = document.createElement('script');
+        risonScript.src = 'https://cdnjs.cloudflare.com/ajax/libs/rison/0.1.1/rison.min.js';
+        document.head.appendChild(risonScript);
+        await new Promise(resolve => risonScript.onload = resolve);
 
         const url = new URL(window.location.href);
         const hash = url.hash;
@@ -34,14 +13,14 @@ javascript:(function(){
 
         const aObj = rison.decode(decodeURIComponent(match[1]));
         if (aObj.discover && aObj.discover.savedSearch) delete aObj.discover.savedSearch;
-        const newARison = rison.encode(aObj);
 
+        const newARison = rison.encode(aObj);
         const newHash = hash.replace(/_a=[^&]*/, `_a=${encodeURIComponent(newARison)}`)
                             .replace(/\/view\/[0-9a-f\-]+/, '/discover');
 
         url.hash = newHash;
         const cleanedUrl = url.toString();
-        navigator.clipboard.writeText(cleanedUrl).then(() => alert('Чистая ссылка скопирована!'));
+        navigator.clipboard.writeText(cleanedUrl).then(() => alert('Чистая ссылка скопирована в буфер обмена!'));
         console.log('Чистая ссылка:', cleanedUrl);
     })();
 })();
