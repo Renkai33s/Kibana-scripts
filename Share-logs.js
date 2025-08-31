@@ -49,18 +49,18 @@ javascript:(function(){
             const switchBtn = document.querySelector('button[data-test-subj="useShortUrl"]');
             if (!switchBtn) {
                 showError('Кнопка Short URL не найдена');
-                resolve();
+                resolve(false);
                 return;
             }
             if (switchBtn.getAttribute('aria-checked') === 'true') {
-                resolve();
+                resolve(false); // уже включено
                 return;
             }
             switchBtn.click();
             const interval = setInterval(function(){
                 if (switchBtn.getAttribute('aria-checked') === 'true') {
                     clearInterval(interval);
-                    resolve();
+                    resolve(true);
                 }
             }, 50);
         });
@@ -76,21 +76,37 @@ javascript:(function(){
         }
     }
 
-    function openAndCopyShare() {
-        const shareBtn = document.querySelector('button[data-test-subj="shareContextMenuButton"]');
-        if(!shareBtn){
-            showError('Кнопка Share не найдена');
-            return;
-        }
-        shareBtn.click();
-        setTimeout(async function(){
-            await clickShortUrlSwitch();
-            clickCopyLink();
-            setTimeout(function(){
-                shareBtn.click(); // закрыть меню Share
-            }, 200);
-        }, 300);
+    function openShareMenu() {
+        return new Promise(function(resolve){
+            const shareBtn = document.querySelector('button[data-test-subj="shareContextMenuButton"]');
+            if(!shareBtn){
+                showError('Кнопка Share не найдена');
+                resolve(false);
+                return;
+            }
+            const menu = document.querySelector('div[data-test-subj="shareContextMenu"]');
+            if(menu) {
+                resolve(false); // меню уже открыто
+            } else {
+                shareBtn.click();
+                setTimeout(() => resolve(true), 300); // подождать открытия меню
+            }
+        });
     }
 
-    openAndCopyShare();
+    async function run() {
+        try {
+            const menuOpened = await openShareMenu();
+            await clickShortUrlSwitch(); // включаем только если нужно
+            clickCopyLink();
+            // закрыть меню
+            const shareBtn = document.querySelector('button[data-test-subj="shareContextMenuButton"]');
+            if(shareBtn) shareBtn.click();
+        } catch(e) {
+            showError('Ошибка при выполнении скрипта');
+            console.error(e);
+        }
+    }
+
+    run();
 })();
