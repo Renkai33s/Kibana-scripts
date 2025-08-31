@@ -1,4 +1,4 @@
-(function(){
+(function() {
 
   // --- Уведомления ---
   if (!window.__notifContainer) {
@@ -31,45 +31,48 @@
     window.__currentNotif=div;
     setTimeout(()=>{ if(window.__currentNotif===div){ div.remove(); window.__currentNotif=null; } },2000);
   }
+
   function showError(msg){ showMessage(msg,true,false); }
   function showSuccess(msg){ showMessage(msg,false,true); }
 
   // --- Основная логика ---
   try {
     let url = window.location.href;
-    
-    // Разделяем base и query
     let [base, query] = url.split('?');
     if(!query) throw new Error("Нет параметров URL");
 
     // Парсим параметры
     let params = {};
-    query.split('&').forEach(p=>{ let [k,v]=p.split('='); params[k]=decodeURIComponent(v||''); });
+    query.split('&').forEach(p => { let [k,v] = p.split('='); params[k] = decodeURIComponent(v || ''); });
 
-    // Убираем savedSearch из _a
-    if(params['_a']) params['_a'] = encodeURIComponent(params['_a'].replace(/savedSearch:'[^']*',?/,''));
+    // Функция рекурсивного удаления savedSearch
+    function removeSavedSearch(obj) {
+      if (typeof obj !== 'object' || !obj) return;
+      if ('savedSearch' in obj) delete obj.savedSearch;
+      Object.values(obj).forEach(removeSavedSearch);
+    }
 
-    // Собираем чистый URL Kibana
-    let newQuery = Object.entries(params).map(([k,v])=>`${k}=${v}`).join('&');
+    // Проверка RISON (используем rison.js)
+    if (params['_a']) {
+      // RISON-декодирование
+      let aObj = window.rison ? window.rison.decode(params['_a']) : null;
+      if(aObj) {
+        removeSavedSearch(aObj);
+        params['_a'] = window.rison.encode(aObj);
+      } else {
+        showError("RISON не найден. savedSearch не удалён.");
+      }
+    }
+
+    // Собираем новый URL
+    let newQuery = Object.entries(params).map(([k,v]) => `${k}=${encodeURIComponent(v)}`).join('&');
     let cleanUrl = `${base}?${newQuery}`;
 
-    // Создаём невидимый iframe для “чистой загрузки”
-    let iframe = document.createElement('iframe');
-    iframe.style.width = '0';
-    iframe.style.height = '0';
-    iframe.style.border = '0';
-    iframe.style.visibility = 'hidden';
-    document.body.appendChild(iframe);
+    // Перезаписываем текущее окно
+    showSuccess("Перезагружаю Kibana без savedSearch...");
+    window.location.replace(cleanUrl);
 
-    // Загружаем blank и потом редиректим
-    iframe.src = 'about:blank';
-    iframe.onload = () => {
-      showSuccess("Открываю Kibana без savedSearch в том же окне...");
-      iframe.contentWindow.location.replace(cleanUrl);
-      setTimeout(()=>{ document.body.removeChild(iframe); }, 3000);
-    };
-
-  } catch(e){
+  } catch(e) {
     showError("Ошибка: "+e.message);
   }
 
