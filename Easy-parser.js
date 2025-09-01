@@ -34,7 +34,7 @@
   function showError(msg){ showMessage(msg,true,false); }
   function showSuccess(msg){ showMessage(msg,false,true); }
 
-  // --- Форматирование вложенных объектов {…} и […]) ---
+  // --- Функция форматирования вложенных объектов {…} и […]) ---
   function formatNestedObject(str) {
     if(!str) return str;
     let indent = 0;
@@ -47,7 +47,7 @@
         result += char + '\n' + '  '.repeat(indent);
       } else if (char === '}' || char === ']') {
         indent--;
-        result += '\n' + '  '.repeat(Math.max(indent, 0)) + char;
+        result += '\n' + '  '.repeat(Math.max(indent, 0)) + char; // безопасный indent
       } else if (char === ',') {
         result += char + '\n' + '  '.repeat(Math.max(indent, 0));
       } else {
@@ -58,42 +58,21 @@
     return result;
   }
 
-  // --- Рекурсивное форматирование всех вложенных объектов ---
-  function formatNestedRecursively(str) {
-    if(!str) return str;
-    let pattern = /({[^{}]*}|\[[^\[\]]*\])/g;
-    let prev;
-    do {
-      prev = str;
-      str = str.replace(pattern, match => formatNestedObject(match));
-    } while(str !== prev);
-    return str;
-  }
-
-  // --- Форматирование XML ---
+  // --- Функция форматирования XML ---
   function formatXML(xml) {
     if(!xml) return xml;
     let formatted = '';
     let indent = 0;
     const reg = /(>)(<)(\/*)/g;
-    xml = xml.replace(reg, '$1\n$2$3');
+    xml = xml.replace(reg, '$1\n$2$3'); // переносы между тегами
     const lines = xml.split('\n');
     lines.forEach(line => {
-      if(line.match(/^<\/\w/)) indent--;
+      if(line.match(/^<\/\w/)) indent--; // закрывающий тег
       const safeIndent = Math.max(indent, 0);
       formatted += '  '.repeat(safeIndent) + line + '\n';
-      if(line.match(/^<[^\/!?][^>]*[^\/]>$/)) indent++;
+      if(line.match(/^<[^\/!?][^>]*[^\/]>$/)) indent++; // открывающий тег, кроме self-closing
     });
     return formatted.trim();
-  }
-
-  // --- Форматирование текста key=value, исключая headers, с рекурсией ---
-  function formatKeyValues(text) {
-    if(!text) return text;
-    return text.replace(/(\w+)=({.*?}|\[.*?\])/g, (match, key, value) => {
-      if(key.toLowerCase() === 'headers') return `${key}=${value}`;
-      return `${key}=${formatNestedRecursively(value)}`;
-    });
   }
 
   // --- Основная логика ---
@@ -119,14 +98,14 @@
             const td = cells[idx];
             if(td && td.textContent.trim() && !noiseRe.test(td.textContent.trim()) && sel.containsNode(td,true)) {
               let text = td.textContent.trim();
-
-              // XML
+              // форматируем XML
               if(text.includes('<') && text.includes('>')) {
                 text = formatXML(text);
               } 
-              // Вложенные объекты key=value
-              text = formatKeyValues(text);
-
+              // форматируем вложенные объекты
+              else if(text.includes('{') || text.includes('[')) {
+                text = formatNestedObject(text);
+              }
               return text;
             }
           }
@@ -136,9 +115,10 @@
         const time = getCellText('time');
         const message = getCellText('message.message');
         let exception = getCellText('message.exception');
-        if(exception) exception = exception.split('\n')[0]; 
+        if(exception) exception = exception.split('\n')[0]; // первая строка
         const payload = getCellText('payload');
 
+        // Формат с разделителем "|": time | message | exception | payload
         const line = [time, message, exception, payload].filter(Boolean).join(' | ');
         if(line) out.push(line);
       }
