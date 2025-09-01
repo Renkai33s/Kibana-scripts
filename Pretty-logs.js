@@ -34,6 +34,56 @@
   function showError(msg){ showMessage(msg,true,false); }
   function showSuccess(msg){ showMessage(msg,false,true); }
 
+  // --- Форматирование JSON/XML/SOAP ---
+  function formatTextIfJsonXml(text){
+    if(!text) return text;
+    text = text.trim();
+
+    // JSON
+    if(text.startsWith('{') || text.startsWith('[')){
+      try{
+        const obj = JSON.parse(text);
+        return JSON.stringify(obj, null, 2);
+      }catch(e){
+        return text;
+      }
+    }
+
+    // XML / SOAP
+    if(text.startsWith('<')){
+      try{
+        const parser = new DOMParser();
+        const xmlDoc = parser.parseFromString(text, "application/xml");
+        if(xmlDoc.getElementsByTagName("parsererror").length){
+          return text;
+        }
+        function formatXml(node, indent = '') {
+          let result = '';
+          if(node.nodeType === 1){ // element
+            result += `${indent}<${node.nodeName}`;
+            for(let attr of node.attributes) result += ` ${attr.name}="${attr.value}"`;
+            result += '>';
+            if(node.childNodes.length > 0){
+              result += '\n';
+              for(let child of node.childNodes){
+                result += formatXml(child, indent + '  ');
+              }
+              result += `${indent}</${node.nodeName}>\n`;
+            } else result += `</${node.nodeName}>\n`;
+          } else if(node.nodeType === 3){ // text
+            if(node.nodeValue.trim()) result += indent + node.nodeValue.trim() + '\n';
+          }
+          return result;
+        }
+        return formatXml(xmlDoc.documentElement).trim();
+      }catch(e){
+        return text;
+      }
+    }
+
+    return text;
+  }
+
   // --- Основная логика ---
   try{
     const sel = window.getSelection();
@@ -76,10 +126,10 @@
         const line1 = [time, traceid, methodid, name].filter(Boolean).join(' ');
         if(line1) block.push(line1);
 
-        if(message) block.push(message);
+        if(message) block.push(formatTextIfJsonXml(message));
+        if(payload) block.push(formatTextIfJsonXml(payload));
         if(level) block.push(level);
         if(exception) block.push(exception);
-        if(payload) block.push(payload);
 
         if(block.length>0) out.push(block.join('\n'));
       }
