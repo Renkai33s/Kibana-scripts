@@ -67,19 +67,16 @@
         if(exception) exception = exception.split('\n')[0]; // берём только первую строку
         const payload = getCellText('payload');
 
-        const block = [];
-
         // Формат: time message.message message.exception payload
         const line = [time, message, exception, payload].filter(Boolean).join(' ');
-        if(line) block.push(line);
-
-        if(block.length>0) out.push(block.join('\n'));
+        if(line) out.push(line);
       }
     });
 
     if(out.length===0){ showError("Нет полезных логов для копирования"); return; }
 
-    navigator.clipboard.writeText(out.join('\n\n'))
+    // Соединяем логи одной строкой на строку
+    navigator.clipboard.writeText(out.join('\n'))
       .then(()=>showSuccess("Логи скопированы"))
       .catch(()=>showError("Ошибка при копировании"));
 
