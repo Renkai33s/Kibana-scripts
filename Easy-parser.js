@@ -47,7 +47,7 @@
         result += char + '\n' + '  '.repeat(indent);
       } else if (char === '}' || char === ']') {
         indent--;
-        result += '\n' + '  '.repeat(Math.max(indent, 0)) + char; // безопасный indent
+        result += '\n' + '  '.repeat(Math.max(indent, 0)) + char;
       } else if (char === ',') {
         result += char + '\n' + '  '.repeat(Math.max(indent, 0));
       } else {
@@ -67,12 +67,22 @@
     xml = xml.replace(reg, '$1\n$2$3'); // переносы между тегами
     const lines = xml.split('\n');
     lines.forEach(line => {
-      if(line.match(/^<\/\w/)) indent--; // закрывающий тег
+      if(line.match(/^<\/\w/)) indent--;
       const safeIndent = Math.max(indent, 0);
       formatted += '  '.repeat(safeIndent) + line + '\n';
-      if(line.match(/^<[^\/!?][^>]*[^\/]>$/)) indent++; // открывающий тег, кроме self-closing
+      if(line.match(/^<[^\/!?][^>]*[^\/]>$/)) indent++;
     });
     return formatted.trim();
+  }
+
+  // --- Форматирование текста key=value, исключая headers ---
+  function formatKeyValues(text) {
+    if(!text) return text;
+    // Разбираем пары key=value с возможными {…} или […]
+    return text.replace(/(\w+)=({.*?}|\[.*?\])/g, (match, key, value) => {
+      if(key.toLowerCase() === 'headers') return `${key}=${value}`;
+      return `${key}=${formatNestedObject(value)}`;
+    });
   }
 
   // --- Основная логика ---
@@ -99,14 +109,12 @@
             if(td && td.textContent.trim() && !noiseRe.test(td.textContent.trim()) && sel.containsNode(td,true)) {
               let text = td.textContent.trim();
 
-              // форматируем XML
+              // XML
               if(text.includes('<') && text.includes('>')) {
                 text = formatXML(text);
               } 
-              // форматируем вложенные объекты, кроме headers
-              else if((text.includes('{') || text.includes('[')) && key.toLowerCase() !== 'headers') {
-                text = formatNestedObject(text);
-              }
+              // Вложенные объекты key=value
+              text = formatKeyValues(text);
 
               return text;
             }
@@ -117,10 +125,9 @@
         const time = getCellText('time');
         const message = getCellText('message.message');
         let exception = getCellText('message.exception');
-        if(exception) exception = exception.split('\n')[0]; // первая строка
+        if(exception) exception = exception.split('\n')[0]; 
         const payload = getCellText('payload');
 
-        // Формат с разделителем "|": time | message | exception | payload
         const line = [time, message, exception, payload].filter(Boolean).join(' | ');
         if(line) out.push(line);
       }
