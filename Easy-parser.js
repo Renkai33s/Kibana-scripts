@@ -47,9 +47,9 @@
         result += char + '\n' + '  '.repeat(indent);
       } else if (char === '}' || char === ']') {
         indent--;
-        result += '\n' + '  '.repeat(indent) + char;
+        result += '\n' + '  '.repeat(Math.max(indent, 0)) + char; // безопасный indent
       } else if (char === ',') {
-        result += char + '\n' + '  '.repeat(indent);
+        result += char + '\n' + '  '.repeat(Math.max(indent, 0));
       } else {
         result += char;
       }
@@ -67,8 +67,9 @@
     xml = xml.replace(reg, '$1\n$2$3'); // переносы между тегами
     const lines = xml.split('\n');
     lines.forEach(line => {
-      if(line.match(/^<\/\w/)) indent--;       // закрывающий тег
-      formatted += '  '.repeat(indent) + line + '\n';
+      if(line.match(/^<\/\w/)) indent--; // закрывающий тег
+      const safeIndent = Math.max(indent, 0);
+      formatted += '  '.repeat(safeIndent) + line + '\n';
       if(line.match(/^<[^\/!?][^>]*[^\/]>$/)) indent++; // открывающий тег, кроме self-closing
     });
     return formatted.trim();
