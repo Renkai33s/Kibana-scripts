@@ -34,6 +34,25 @@
   function showError(msg){ showMessage(msg,true,false); }
   function showSuccess(msg){ showMessage(msg,false,true); }
 
+  // --- Форматирование времени ---
+  function formatTime(raw){
+    if(!raw) return '';
+    // Пробуем распарсить дату формата "Sep 2, 2025 @ 00:09:37.846103914"
+    const match = raw.match(/([A-Za-z]+) (\d+), (\d+) @ (\d+:\d+:\d+)/);
+    if(match){
+      const monthNames = {
+        Jan: '01', Feb: '02', Mar: '03', Apr: '04', May: '05', Jun: '06',
+        Jul: '07', Aug: '08', Sep: '09', Oct: '10', Nov: '11', Dec: '12'
+      };
+      const m = monthNames[match[1]] || '01';
+      const d = match[2].padStart(2,'0');
+      const y = match[3];
+      const hms = match[4];
+      return `${y}-${m}-${d} ${hms}`;
+    }
+    return raw; // если не получилось распарсить, возвращаем как есть
+  }
+
   // --- Основная логика ---
   try{
     const sel = window.getSelection();
@@ -61,7 +80,7 @@
           return null;
         }
 
-        const time = getCellText('time');
+        const time = formatTime(getCellText('time'));
         const message = getCellText('message.message');
         let exception = getCellText('message.exception');
         if(exception) exception = exception.split('\n')[0]; // берём только первую строку
@@ -75,7 +94,6 @@
 
     if(out.length===0){ showError("Нет полезных логов для копирования"); return; }
 
-    // Соединяем логи одной строкой на строку
     navigator.clipboard.writeText(out.join('\n'))
       .then(()=>showSuccess("Логи скопированы"))
       .catch(()=>showError("Ошибка при копировании"));
