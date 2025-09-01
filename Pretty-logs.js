@@ -34,6 +34,30 @@
   function showError(msg){ showMessage(msg,true,false); }
   function showSuccess(msg){ showMessage(msg,false,true); }
 
+  // --- Функция форматирования вложенных объектов ---
+  function formatNestedObject(str) {
+    if(!str) return str;
+    let indent = 0;
+    let result = '';
+    let i = 0;
+    while (i < str.length) {
+      const char = str[i];
+      if (char === '{' || char === '[') {
+        indent++;
+        result += char + '\n' + '  '.repeat(indent);
+      } else if (char === '}' || char === ']') {
+        indent--;
+        result += '\n' + '  '.repeat(indent) + char;
+      } else if (char === ',') {
+        result += char + '\n' + '  '.repeat(indent);
+      } else {
+        result += char;
+      }
+      i++;
+    }
+    return result;
+  }
+
   // --- Основная логика ---
   try{
     const sel = window.getSelection();
@@ -65,17 +89,17 @@
         const message = getCellText('message.message');
         let exception = getCellText('message.exception');
         if(exception) exception = exception.split('\n')[0]; // берём только первую строку
-        const payload = getCellText('payload');
+        let payload = getCellText('payload');
+        if(payload) payload = formatNestedObject(payload); // форматируем payload
 
-        // Формат: time message.message message.exception payload
-        const line = [time, message, exception, payload].filter(Boolean).join(' ');
+        // Формат с разделителем "|": time | message | exception | payload
+        const line = [time, message, exception, payload].filter(Boolean).join(' | ');
         if(line) out.push(line);
       }
     });
 
     if(out.length===0){ showError("Нет полезных логов для копирования"); return; }
 
-    // Соединяем логи одной строкой на строку
     navigator.clipboard.writeText(out.join('\n'))
       .then(()=>showSuccess("Логи скопированы"))
       .catch(()=>showError("Ошибка при копировании"));
