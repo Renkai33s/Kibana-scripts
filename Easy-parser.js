@@ -58,13 +58,25 @@
     return result;
   }
 
+  // --- Рекурсивное форматирование всех вложенных объектов ---
+  function formatNestedRecursively(str) {
+    if(!str) return str;
+    let pattern = /({[^{}]*}|\[[^\[\]]*\])/g;
+    let prev;
+    do {
+      prev = str;
+      str = str.replace(pattern, match => formatNestedObject(match));
+    } while(str !== prev);
+    return str;
+  }
+
   // --- Форматирование XML ---
   function formatXML(xml) {
     if(!xml) return xml;
     let formatted = '';
     let indent = 0;
     const reg = /(>)(<)(\/*)/g;
-    xml = xml.replace(reg, '$1\n$2$3'); // переносы между тегами
+    xml = xml.replace(reg, '$1\n$2$3');
     const lines = xml.split('\n');
     lines.forEach(line => {
       if(line.match(/^<\/\w/)) indent--;
@@ -75,13 +87,12 @@
     return formatted.trim();
   }
 
-  // --- Форматирование текста key=value, исключая headers ---
+  // --- Форматирование текста key=value, исключая headers, с рекурсией ---
   function formatKeyValues(text) {
     if(!text) return text;
-    // Разбираем пары key=value с возможными {…} или […]
     return text.replace(/(\w+)=({.*?}|\[.*?\])/g, (match, key, value) => {
       if(key.toLowerCase() === 'headers') return `${key}=${value}`;
-      return `${key}=${formatNestedObject(value)}`;
+      return `${key}=${formatNestedRecursively(value)}`;
     });
   }
 
