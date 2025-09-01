@@ -63,12 +63,9 @@
       if (current.length) {
         const cleaned = current.filter(l => !noiseRe.test(l));
 
-        // сокращаем дату до 3 знаков после запятой только для строк с датой
+        // сокращаем дату до 3 знаков после запятой
         const formatted = cleaned.map(l => {
-          if (dateRe.test(l)) {
-            return l.replace(/(@ \d{2}:\d{2}:\d{2}\.\d{3})\d*/, '$1');
-          }
-          return l;
+          return l.replace(/(@ \d{2}:\d{2}:\d{2}\.\d{3})\d*/, '$1');
         });
 
         if (formatted.length) blocks.push(formatted.join(' | '));
