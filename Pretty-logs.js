@@ -34,7 +34,7 @@
   function showError(msg){ showMessage(msg,true,false); }
   function showSuccess(msg){ showMessage(msg,false,true); }
 
-  // --- Форматирование JSON/XML/SOAP ---
+  // --- Форматирование JSON/XML ---
   function formatTextIfJsonXml(text){
     if(!text) return text;
     text = text.trim();
@@ -59,7 +59,7 @@
         }
         function formatXml(node, indent = '') {
           let result = '';
-          if(node.nodeType === 1){ // element
+          if(node.nodeType === 1){
             result += `${indent}<${node.nodeName}`;
             for(let attr of node.attributes) result += ` ${attr.name}="${attr.value}"`;
             result += '>';
@@ -70,7 +70,7 @@
               }
               result += `${indent}</${node.nodeName}>\n`;
             } else result += `</${node.nodeName}>\n`;
-          } else if(node.nodeType === 3){ // text
+          } else if(node.nodeType === 3){
             if(node.nodeValue.trim()) result += indent + node.nodeValue.trim() + '\n';
           }
           return result;
@@ -82,6 +82,51 @@
     }
 
     return text;
+  }
+
+  // --- Форматирование Java-style объектов ---
+  function formatJavaStyleObject(text, indent=''){
+    if(!text) return text;
+    text = text.trim();
+
+    // Если это JSON/XML, используем старый парсер
+    if(text.startsWith('{') || text.startsWith('[') || text.startsWith('<')) {
+      return formatTextIfJsonXml(text);
+    }
+
+    // Проверка на Java-style object: ClassName{...}
+    const match = text.match(/^(\w+)\{(.+)\}$/s);
+    if(!match) return text; // не Java-style
+
+    const className = match[1];
+    const content = match[2].trim();
+    let result = indent + className + ' {\n';
+
+    let buffer = '';
+    let depth = 0;
+    for(let i=0; i<content.length; i++){
+      const char = content[i];
+      if(char === '{' || char === '[') depth++;
+      if(char === '}' || char === ']') depth--;
+      if(char === ',' && depth===0){
+        result += formatJavaField(buffer.trim(), indent+'  ');
+        buffer = '';
+      } else buffer += char;
+    }
+    if(buffer.trim()) result += formatJavaField(buffer.trim(), indent+'  ');
+
+    result += indent + '}\n';
+    return result.trim();
+  }
+
+  function formatJavaField(fieldText, indent){
+    const idx = fieldText.indexOf('=');
+    if(idx<0) return indent + fieldText + '\n';
+    const key = fieldText.substring(0, idx).trim();
+    let value = fieldText.substring(idx+1).trim();
+    // рекурсивно форматируем значение
+    if(value.match(/^\w+\{.*\}$/s) || value.startsWith('[')) value = formatJavaStyleObject(value, indent+'  ');
+    return `${indent}${key} = ${value}\n`;
   }
 
   // --- Основная логика ---
@@ -126,8 +171,8 @@
         const line1 = [time, traceid, methodid, name].filter(Boolean).join(' ');
         if(line1) block.push(line1);
 
-        if(message) block.push(formatTextIfJsonXml(message));
-        if(payload) block.push(formatTextIfJsonXml(payload));
+        if(message) block.push(formatJavaStyleObject(message));
+        if(payload) block.push(formatJavaStyleObject(payload));
         if(level) block.push(level);
         if(exception) block.push(exception);
 
