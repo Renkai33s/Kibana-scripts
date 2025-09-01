@@ -1,53 +1,59 @@
 (function () {
-  // === Вспомогательные функции ===
+  // --- Уведомления ---
   if (!window.__notifContainer) {
-    const c = document.createElement("div");
-    c.id = "notif-container";
-    c.style.position = "fixed";
-    c.style.bottom = "20px";
-    c.style.right = "20px";
-    c.style.width = "auto";
-    c.style.zIndex = 999999;
-    document.body.appendChild(c);
-    window.__notifContainer = c;
+    const container = document.createElement("div");
+    container.id = "notif-container";
+    container.style.position = "fixed";
+    container.style.bottom = "20px";
+    container.style.right = "20px";
+    container.style.width = "auto";
+    container.style.zIndex = 999999;
+    document.body.appendChild(container);
+
+    window.__notifContainer = container;
     window.__currentNotif = null;
   }
 
-  function showMessage(text, type = "info") {
+  function showMessage(text, isError = false, isSuccess = false) {
     if (window.__currentNotif) {
       window.__currentNotif.remove();
       window.__currentNotif = null;
     }
-    const div = document.createElement("div");
-    div.textContent = text;
-    div.style.padding = "10px 15px";
-    div.style.borderRadius = "8px";
-    div.style.background =
-      type === "error"
-        ? "#ff4d4f"
-        : type === "success"
-        ? "#52c41a"
-        : "#3498db";
-    div.style.color = "white";
-    div.style.fontFamily = "sans-serif";
-    div.style.fontSize = "14px";
-    div.style.minWidth = "120px";
-    div.style.textAlign = "center";
-    div.style.boxShadow = "0 2px 6px rgba(0,0,0,0.2)";
-    window.__notifContainer.appendChild(div);
-    window.__currentNotif = div;
+    const el = document.createElement("div");
+    el.textContent = text;
+    el.style.padding = "10px 15px";
+    el.style.borderRadius = "8px";
+    el.style.background = isError ? "#ff4d4f" : isSuccess ? "#52c41a" : "#3498db";
+    el.style.color = "white";
+    el.style.fontFamily = "sans-serif";
+    el.style.fontSize = "14px";
+    el.style.minWidth = "120px";
+    el.style.textAlign = "center";
+    el.style.boxShadow = "0 2px 6px rgba(0,0,0,0.2)";
+    window.__notifContainer.appendChild(el);
+    window.__currentNotif = el;
+
     setTimeout(() => {
-      if (window.__currentNotif === div) {
-        div.remove();
+      if (window.__currentNotif === el) {
+        el.remove();
         window.__currentNotif = null;
       }
     }, 2000);
   }
 
-  const showError = (m) => showMessage(m, "error");
-  const showSuccess = (m) => showMessage(m, "success");
-  const showInfo = (m) => showMessage(m, "info");
+  function showError(msg) {
+    showMessage(msg, true, false);
+  }
 
+  function showSuccess(msg) {
+    showMessage(msg, false, true);
+  }
+
+  function showLimit(msg) {
+    showMessage(msg, false, true);
+  }
+
+  // --- Вспомогательные ---
   function x(xpath) {
     return document.evaluate(
       xpath,
@@ -58,9 +64,14 @@
     ).singleNodeValue;
   }
 
-  // === XPath селекторы ===
-  const scrollableXPath =
-    "/html/body/div[1]/div/div/div/div[2]/div/div/div/div/div[2]/div/div/div";
+  const scrollable = x(
+    "/html/body/div[1]/div/div/div/div[2]/div/div/div/div/div[2]/div/div/div"
+  );
+  if (!scrollable) {
+    showError("Элемент для скролла не найден");
+    return;
+  }
+
   const countXPath =
     "/html/body/div[1]/div/div/div/div[2]/div/div/div/div/div[2]/div/div/div/div[2]/div[1]/div[1]/div[1]/div[1]/div/div/div[1]/div/strong";
   const tableXPath =
@@ -72,10 +83,6 @@
   const tracesBtnXPath =
     "/html/body/div[1]/div/div/div/div[2]/div/div/div/div/div[1]/div/div/div/div[2]/div/div[2]/div[1]/div[1]/div/div/div[3]/div/div/button";
 
-  const scrollable = x(scrollableXPath);
-  if (!scrollable) return showError("Элемент для скролла не найден");
-
-  // === Сбор трейсов ===
   function getTracesFromTable(traceIdx) {
     const table = x(tableXPath);
     if (!table) return [];
@@ -88,152 +95,195 @@
   }
 
   function getTracesFromPopover() {
-    const pop = document.querySelector(".dscSidebarItem__fieldPopoverPanel");
-    if (!pop) return [];
+    const popover = document.querySelector(".dscSidebarItem__fieldPopoverPanel");
+    if (!popover) return [];
     let traces = [];
-    pop.querySelectorAll(
-      '[data-test-subj="fieldVisualizeBucketContainer"] .euiText[title]'
-    ).forEach((el) => traces.push(el.innerText.trim()));
+    popover
+      .querySelectorAll(
+        '[data-test-subj="fieldVisualizeBucketContainer"] .euiText[title]'
+      )
+      .forEach((el) => {
+        traces.push(el.innerText.trim());
+      });
     return [...new Set(traces)];
   }
 
-  function insertAndRun(traces, limitReached = false) {
-    if (traces.length === 0) return showError("Трейсы не найдены");
-
-    const text = "(" + traces.map((t) => `"${t}"`).join(" ") + ")";
+  function insertAndRun(traces, tLimit = false) {
+    if (traces.length === 0) {
+      showError("Трейсы не найдены");
+      return;
+    }
+    const value = "(" + traces.map((t) => `"${t}"`).join(" ") + ")";
     const textarea = x(textareaXPath);
     if (textarea) {
       let setter = Object.getOwnPropertyDescriptor(
         window.HTMLTextAreaElement.prototype,
         "value"
       ).set;
-      setter.call(textarea, text);
+      setter.call(textarea, value);
       textarea.dispatchEvent(new Event("input", { bubbles: true }));
       textarea.dispatchEvent(new Event("change", { bubbles: true }));
     }
+    const btn = x(buttonXPath);
+    if (btn) btn.click();
 
-    const button = x(buttonXPath);
-    if (button) button.click();
-
-    if (limitReached) {
-      showInfo("Достигнут лимит в 20 трейсов");
+    if (tLimit) {
+      showLimit("Достигнут лимит в 20 трейсов");
     } else {
       showSuccess("Трейсы подставлены");
     }
   }
 
-  // === Прогресс-бар ===
-  function createProgress() {
-    const div = document.createElement("div");
-    div.style.position = "fixed";
-    div.style.bottom = "20px";
-    div.style.right = "20px";
-    div.style.padding = "6px 10px";
-    div.style.borderRadius = "8px";
-    div.style.background = "#3498db";
-    div.style.color = "white";
-    div.style.fontFamily = "sans-serif";
-    div.style.fontSize = "14px";
-    div.style.zIndex = 999999;
-    div.style.display = "flex";
-    div.style.alignItems = "center";
-    div.style.gap = "8px";
-
-    const label = document.createElement("div");
-    label.textContent = "0 трейсов";
-    div.appendChild(label);
-
-    const stopBtn = document.createElement("button");
-    stopBtn.textContent = "×";
-    stopBtn.style.fontSize = "12px";
-    stopBtn.style.cursor = "pointer";
-    stopBtn.style.border = "none";
-    stopBtn.style.borderRadius = "4px";
-    stopBtn.style.padding = "0 4px";
-    stopBtn.style.background = "white";
-    stopBtn.style.color = "#3498db";
-    div.appendChild(stopBtn);
-
-    document.body.appendChild(div);
-
-    return {
-      update: (n) => (label.textContent = `${n} трейсов`),
-      remove: () => div.remove(),
-      stopButton: stopBtn,
-    };
-  }
-
-  // === Основная логика ===
+  // --- Логика подсчета ---
   const cntEl = x(countXPath);
-  let logCount = 0;
+  let cnt = 0;
   if (cntEl && cntEl.textContent) {
-    const digits = cntEl.textContent.replace(/\D/g, "");
-    logCount = parseInt(digits, 10) || 0;
+    const num = cntEl.textContent.replace(/\D/g, "");
+    cnt = parseInt(num, 10) || 0;
+    console.log("cntEl.textContent:", cntEl.textContent, "=> cnt:", cnt);
   }
 
   const table = x(tableXPath);
-  if (!table) return showError("Таблица не найдена");
-
+  if (!table) {
+    showError("Таблица не найдена");
+    return;
+  }
   const headers = [...table.querySelectorAll("thead tr th")].map((th) =>
     th.innerText.trim()
   );
   const traceIdx = headers.indexOf("message.traceid");
-  if (traceIdx === -1) return showError("Колонка message.traceid не найдена");
+  if (traceIdx === -1) {
+    showError("Трейсы не найдены");
+    return;
+  }
+
+  // --- Прогресс бар ---
+  function showProgress() {
+    const box = document.createElement("div");
+    box.style.position = "fixed";
+    box.style.bottom = "20px";
+    box.style.right = "20px";
+    box.style.padding = "6px 10px";
+    box.style.borderRadius = "8px";
+    box.style.background = "#3498db";
+    box.style.color = "white";
+    box.style.fontFamily = "sans-serif";
+    box.style.fontSize = "14px";
+    box.style.zIndex = 999999;
+    box.style.display = "flex";
+    box.style.alignItems = "center";
+    box.style.gap = "8px";
+
+    const textEl = document.createElement("div");
+    textEl.textContent = "0 трейсов";
+    box.appendChild(textEl);
+
+    const btn = document.createElement("button");
+    btn.textContent = "×";
+    btn.style.fontSize = "12px";
+    btn.style.cursor = "pointer";
+    btn.style.border = "none";
+    btn.style.borderRadius = "4px";
+    btn.style.padding = "0 4px";
+    btn.style.background = "white";
+    btn.style.color = "#3498db";
+    box.appendChild(btn);
+
+    document.body.appendChild(box);
+
+    return {
+      update: function (val) {
+        textEl.textContent = val + " трейсов";
+      },
+      remove: function () {
+        box.remove();
+      },
+      stopButton: btn,
+    };
+  }
 
   let prog = null;
+  let prevRows = 0;
+  let unchanged = 0;
   let timerID = null;
+  let didScrollDown = false;
 
-  function runAfterScroll(traces, limitReached = false) {
+  function runAfterScroll(traces, tLimit = false) {
     try {
-      prog && prog.remove();
-      scrollable.scrollTop = 0;
-      insertAndRun(traces, limitReached);
+      if (prog) prog.remove();
+      if (didScrollDown) scrollable.scrollTop = 0;
+      insertAndRun(traces, tLimit);
     } catch (e) {
-      prog && prog.remove();
-      scrollable.scrollTop = 0;
-      showError("Ошибка при завершении скролла");
+      if (prog) prog.remove();
+      if (didScrollDown) scrollable.scrollTop = 0;
+      showError("Что-то пошло не так");
     }
   }
 
-  function scrollLoop() {
+  function scrollLoop(traceIdx) {
+    if (!scrollable) return;
     try {
       scrollable.scrollTop = scrollable.scrollHeight;
+      didScrollDown = true;
 
       let traces = getTracesFromTable(traceIdx);
       prog && prog.update(traces.length);
 
       if (traces.length >= 20) {
         if (timerID) clearTimeout(timerID);
-        return runAfterScroll(traces, true);
+        runAfterScroll(traces, true);
+        return;
       }
 
-      timerID = setTimeout(scrollLoop, 200);
+      timerID = setTimeout(() => {
+        const rowCount = getRowCount();
+        if (rowCount > prevRows) {
+          prevRows = rowCount;
+          unchanged = 0;
+        } else {
+          unchanged++;
+        }
+        if (unchanged < 10) {
+          scrollLoop(traceIdx);
+        } else {
+          runAfterScroll(traces);
+        }
+      }, 100);
     } catch (e) {
       showError("Ошибка при скролле");
       runAfterScroll(getTracesFromTable(traceIdx));
     }
   }
 
+  function getRowCount() {
+    try {
+      const table = x(tableXPath);
+      return table ? table.querySelectorAll("tbody tr").length : 0;
+    } catch (e) {
+      return 0;
+    }
+  }
+
+  // --- Основной алгоритм ---
   const tracesBtn = x(tracesBtnXPath);
 
-  if (logCount <= 50) {
-    // без меню и без скролла
+  if (cnt <= 50) {
     insertAndRun(getTracesFromTable(traceIdx));
   } else if (tracesBtn) {
     tracesBtn.click();
     setTimeout(() => {
-      const popoverTraces = getTracesFromPopover();
+      const traces = getTracesFromPopover();
       tracesBtn.click();
 
-      if (popoverTraces.length > 0 && popoverTraces.length <= 4) {
-        insertAndRun(popoverTraces);
-      } else if (popoverTraces.length > 4) {
-        prog = createProgress();
+      if (traces.length > 0 && traces.length <= 4) {
+        insertAndRun(traces);
+      } else if (traces.length > 4) {
+        prog = showProgress();
         prog.stopButton.onclick = () => {
           if (timerID) clearTimeout(timerID);
           runAfterScroll(getTracesFromTable(traceIdx));
         };
-        scrollLoop();
+        scrollLoop(traceIdx);
       } else {
         showError("Не удалось определить количество трейсов");
       }
