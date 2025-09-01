@@ -34,28 +34,6 @@
   function showError(msg){ showMessage(msg,true,false); }
   function showSuccess(msg){ showMessage(msg,false,true); }
 
-  // --- Pretty print message ---
-  function prettyFormatMessage(msg) {
-    msg = msg.trim();
-    if(!msg) return '';
-    try {
-      // Попробуем JSON
-      if(msg.startsWith('{') || msg.startsWith('[')) {
-        const obj = JSON.parse(msg);
-        return JSON.stringify(obj, null, 2);
-      }
-    } catch(e){}
-
-    try {
-      // Простейший XML форматтер: добавляем переносы после >
-      if(msg.startsWith('<')) {
-        return msg.replace(/></g, '>\n<').replace(/\t/g, '  ');
-      }
-    } catch(e){}
-
-    return msg; // если не JSON и не XML, оставляем как есть
-  }
-
   // --- Основная логика ---
   try{
     const sel = window.getSelection();
@@ -84,24 +62,14 @@
         }
 
         const time = getCellText('time');
-        let message = getCellText('message.message');
-        if(message) message = prettyFormatMessage(message);
-
+        const message = getCellText('message.message');
         let exception = getCellText('message.exception');
-        if(exception) exception = exception.split('\n')[0]; // первая строка
-
+        if(exception) exception = exception.split('\n')[0]; // берём только первую строку
         const payload = getCellText('payload');
 
-        // Формат pretty print
-        const lines = [];
-        if(time) lines.push(`Time: ${time}`);
-        if(message) lines.push(`Message:\n${message}`);
-        if(exception) lines.push(`Exception: ${exception}`);
-        if(payload) lines.push(`Payload: ${payload}`);
-
-        if(lines.length>0) {
-          out.push(lines.join('\n') + '\n────────────');
-        }
+        // Формат с разделителем "|": time | message | exception | payload
+        const line = [time, message, exception, payload].filter(Boolean).join(' | ');
+        if(line) out.push(line);
       }
     });
 
