@@ -34,7 +34,7 @@
   function showError(msg){ showMessage(msg,true,false); }
   function showSuccess(msg){ showMessage(msg,false,true); }
 
-  // --- Функция форматирования вложенных объектов {…} и […]) ---
+  // --- Форматирование вложенных объектов {…} и […]) ---
   function formatNestedObject(str) {
     if(!str) return str;
     let indent = 0;
@@ -58,7 +58,7 @@
     return result;
   }
 
-  // --- Функция форматирования XML ---
+  // --- Форматирование XML ---
   function formatXML(xml) {
     if(!xml) return xml;
     let formatted = '';
@@ -98,14 +98,16 @@
             const td = cells[idx];
             if(td && td.textContent.trim() && !noiseRe.test(td.textContent.trim()) && sel.containsNode(td,true)) {
               let text = td.textContent.trim();
+
               // форматируем XML
               if(text.includes('<') && text.includes('>')) {
                 text = formatXML(text);
               } 
-              // форматируем вложенные объекты
-              else if(text.includes('{') || text.includes('[')) {
+              // форматируем вложенные объекты, кроме headers
+              else if((text.includes('{') || text.includes('[')) && key.toLowerCase() !== 'headers') {
                 text = formatNestedObject(text);
               }
+
               return text;
             }
           }
