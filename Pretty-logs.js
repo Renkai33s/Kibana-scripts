@@ -79,8 +79,14 @@
           const idx = ths.findIndex(th=>th.textContent.trim().toLowerCase()===key);
           if(idx>=0){
             const td = cells[idx];
-            if(td && td.textContent.trim() && !noiseRe.test(td.textContent.trim()) && sel.containsNode(td,true))
-              return td.textContent.trim();
+            if(td && td.textContent.trim() && !noiseRe.test(td.textContent.trim()) && sel.containsNode(td,true)) {
+              let text = td.textContent.trim();
+              // форматируем, если есть вложенные структуры
+              if(text.includes('{') || text.includes('[')) {
+                text = formatNestedObject(text);
+              }
+              return text;
+            }
           }
           return null;
         }
@@ -88,9 +94,8 @@
         const time = getCellText('time');
         const message = getCellText('message.message');
         let exception = getCellText('message.exception');
-        if(exception) exception = exception.split('\n')[0]; // берём только первую строку
-        let payload = getCellText('payload');
-        if(payload) payload = formatNestedObject(payload); // форматируем payload
+        if(exception) exception = exception.split('\n')[0]; // первая строка
+        const payload = getCellText('payload');
 
         // Формат с разделителем "|": time | message | exception | payload
         const line = [time, message, exception, payload].filter(Boolean).join(' | ');
