@@ -72,8 +72,8 @@
 
         const block = [];
 
-        // Первая строка: Time + [traceid] [methodid] [name]
-        const line1 = [time, traceid ? `[${traceid}]` : null, methodid ? `[${methodid}]` : null, name ? `[${name}]` : null].filter(Boolean).join(' ');
+        // Первая строка: Time traceid methodid name
+        const line1 = [time, traceid, methodid, name].filter(Boolean).join(' ');
         if(line1) block.push(line1);
 
         if(message) block.push(message);
