@@ -62,24 +62,16 @@
         }
 
         const time = getCellText('time');
-        const traceid = getCellText('message.traceid');
-        const methodid = getCellText('message.methodid');
-        const name = getCellText('message.name');
         const message = getCellText('message.message');
-        const level = getCellText('message.level');
-        const exception = getCellText('message.exception');
+        let exception = getCellText('message.exception');
+        if(exception) exception = exception.split('\n')[0]; // берём только первую строку
         const payload = getCellText('payload');
 
         const block = [];
 
-        // Первая строка: Time traceid methodid name
-        const line1 = [time, traceid, methodid, name].filter(Boolean).join(' ');
-        if(line1) block.push(line1);
-
-        if(message) block.push(message);
-        if(level) block.push(level);
-        if(exception) block.push(exception);
-        if(payload) block.push(payload);
+        // Формат: time message.message message.exception payload
+        const line = [time, message, exception, payload].filter(Boolean).join(' ');
+        if(line) block.push(line);
 
         if(block.length>0) out.push(block.join('\n'));
       }
