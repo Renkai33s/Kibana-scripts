@@ -67,14 +67,15 @@
         if(exception) exception = exception.split('\n')[0]; // берём только первую строку
         const payload = getCellText('payload');
 
-        // Формат с разделителем "|": time | message | exception | payload
-        const line = [time, message, exception, payload].filter(Boolean).join(' | ');
+        // Формат: time message.message message.exception payload
+        const line = [time, message, exception, payload].filter(Boolean).join(' ');
         if(line) out.push(line);
       }
     });
 
     if(out.length===0){ showError("Нет полезных логов для копирования"); return; }
 
+    // Соединяем логи одной строкой на строку
     navigator.clipboard.writeText(out.join('\n'))
       .then(()=>showSuccess("Логи скопированы"))
       .catch(()=>showError("Ошибка при копировании"));
