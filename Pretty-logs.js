@@ -34,30 +34,6 @@
   function showError(msg){ showMessage(msg,true,false); }
   function showSuccess(msg){ showMessage(msg,false,true); }
 
-  // --- Функция форматирования вложенных объектов ---
-  function formatNestedObject(str) {
-    if(!str) return str;
-    let indent = 0;
-    let result = '';
-    let i = 0;
-    while (i < str.length) {
-      const char = str[i];
-      if (char === '{' || char === '[') {
-        indent++;
-        result += char + '\n' + '  '.repeat(indent);
-      } else if (char === '}' || char === ']') {
-        indent--;
-        result += '\n' + '  '.repeat(indent) + char;
-      } else if (char === ',') {
-        result += char + '\n' + '  '.repeat(indent);
-      } else {
-        result += char;
-      }
-      i++;
-    }
-    return result;
-  }
-
   // --- Основная логика ---
   try{
     const sel = window.getSelection();
@@ -79,14 +55,8 @@
           const idx = ths.findIndex(th=>th.textContent.trim().toLowerCase()===key);
           if(idx>=0){
             const td = cells[idx];
-            if(td && td.textContent.trim() && !noiseRe.test(td.textContent.trim()) && sel.containsNode(td,true)) {
-              let text = td.textContent.trim();
-              // форматируем, если есть вложенные структуры
-              if(text.includes('{') || text.includes('[')) {
-                text = formatNestedObject(text);
-              }
-              return text;
-            }
+            if(td && td.textContent.trim() && !noiseRe.test(td.textContent.trim()) && sel.containsNode(td,true))
+              return td.textContent.trim();
           }
           return null;
         }
@@ -94,7 +64,7 @@
         const time = getCellText('time');
         const message = getCellText('message.message');
         let exception = getCellText('message.exception');
-        if(exception) exception = exception.split('\n')[0]; // первая строка
+        if(exception) exception = exception.split('\n')[0]; // берём только первую строку
         const payload = getCellText('payload');
 
         // Формат с разделителем "|": time | message | exception | payload
