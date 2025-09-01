@@ -53,51 +53,45 @@
     }
 
     const lines = sel.split('\n').map(l => l.trim()).filter(Boolean);
+    const dateRe = /^[A-Z][a-z]{2} \d{1,2}, \d{4} @/;
+    const noiseRe = /^(INFO|DEBUG|WARN|WARNING|ERROR|TRACE|-|–|—)$/i;
 
-    // Находим заголовки
-    let headers = [];
-    let headerLineIndex = -1;
-    for (let i = 0; i < lines.length; i++) {
-      const line = lines[i];
-      if (line.includes("Time") && line.includes("message.traceid")) {
-        headers = line.split(',').map(h => h.trim());
-        headerLineIndex = i;
-        break;
+    const blocks = [];
+    let current = [];
+
+    const push = () => {
+      if (current.length) {
+        const cleaned = current.filter(l => !noiseRe.test(l));
+
+        // сокращаем дату до 3 знаков после запятой
+        const formatted = cleaned.map(l => {
+          return l.replace(/(@ \d{2}:\d{2}:\d{2}\.\d{3})\d*/, '$1');
+        });
+
+        if (formatted.length) blocks.push(formatted.join(' | '));
+        current = [];
+      }
+    };
+
+    for (const line of lines) {
+      if (dateRe.test(line)) {
+        push();
+        current.push(line);
+      } else {
+        current.push(line);
       }
     }
+    push();
 
-    if (!headers.length) {
-      showError("Заголовки не найдены");
-      return;
-    }
-
-    const dataLines = lines.slice(headerLineIndex + 1);
-    const processed = [];
-
-    for (const line of dataLines) {
-      const parts = line.split(',').map(p => p.trim());
-      const row = [];
-
-      headers.forEach((h, i) => {
-        let val = parts[i] || '';
-        if (["message.traceid","message.methodid","message.name"].includes(h)) {
-          val = `[${val}]`;
-        }
-        row.push(val);
-      });
-
-      if (row.length) processed.push(row.join(' '));
-    }
-
-    if (!processed.length) {
+    const out = blocks.join('\n');
+    if (!out) {
       showError("Нет полезных логов для копирования");
       return;
     }
 
-    navigator.clipboard.writeText(processed.join('\n'))
+    navigator.clipboard.writeText(out)
       .then(() => showSuccess("Логи скопированы"))
       .catch(() => showError("Что-то пошло не так"));
-
   } catch (e) {
     showError("Что-то пошло не так");
   }
