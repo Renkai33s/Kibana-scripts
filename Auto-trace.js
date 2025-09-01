@@ -115,6 +115,7 @@
   }
 
   let prog = null, step = 0, prevRows = 0, unchanged = 0, timerID = null;
+  let didScrollDown = false; // флаг для отслеживания скролла вниз
 
   function getRowCount(){
     try {
@@ -138,7 +139,9 @@
       ids = [...new Set(ids)];
 
       if(prog) prog.remove();
-      s.scrollTop = 0; // Скроллим наверх всегда
+
+      // Скроллим наверх только если был скролл вниз
+      if(didScrollDown) s.scrollTop = 0;
 
       if(ids.length === 0){
         showError('Трейсы не найдены');
@@ -160,7 +163,7 @@
       showSuccess("Трейсы подставлены");
     } catch(e) {
       if(prog) prog.remove();
-      s.scrollTop = 0; // Скроллим наверх при ошибке
+      if(didScrollDown) s.scrollTop = 0; // Скроллим наверх только если был скролл вниз
       showError('Что-то пошло не так');
     }
   }
@@ -169,6 +172,7 @@
     if(!s) return;
     try{
       s.scrollTop = s.scrollHeight;
+      didScrollDown = true; // отметка, что был скролл вниз
       step++;
       if(prog) prog.update(step);
 
