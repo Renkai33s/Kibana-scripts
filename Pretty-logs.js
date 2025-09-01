@@ -53,29 +53,51 @@
     }
 
     const lines = sel.split('\n').map(l => l.trim()).filter(Boolean);
-    const dateRe = /^[A-Z][a-z]{2} \d{1,2}, \d{4} @/;
-    const noiseRe = /^(INFO|DEBUG|WARN|WARNING|ERROR|TRACE|-|–|—)$/i;
+
+    const dateRe = /\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}(?:,\d+)?/; // YYYY-MM-DD HH:MM:SS,ms
+    const levelRe = /\b(INFO|DEBUG|WARN|WARNING|ERROR|TRACE)\b/i;
+    const bracketRe = /\[([^\]]+)\]/g; // находит все скобки
+    const dashRe = / - /; // для разделителя, если поток/модуль через " - "
 
     const blocks = [];
-    let current = [];
-
-    const push = () => {
-      if (current.length) {
-        const cleaned = current.filter(l => !noiseRe.test(l));
-        if (cleaned.length) blocks.push(cleaned.join('   ')); // <-- здесь заменено на " | "
-        current = [];
-      }
-    };
 
     for (const line of lines) {
-      if (dateRe.test(line)) {
-        push();
-        current.push(line);
-      } else {
-        current.push(line);
+      if (!line) continue;
+
+      let date = dateRe.exec(line)?.[0];
+      let level = levelRe.exec(line)?.[0].toUpperCase();
+
+      // Ищем все скобки
+      let brackets = [...line.matchAll(bracketRe)].map(m => m[1]);
+
+      // Поток и модуль
+      let thread = brackets[0] || null;
+      let module = brackets[1] || null;
+
+      // Если нет скобок, попробуем найти через " - "
+      if (!thread || !module) {
+        const parts = line.split(dashRe).map(p => p.trim()).filter(Boolean);
+        if (!thread && parts[1]) thread = parts[1];
+        if (!module && parts[2]) module = parts[2];
       }
+
+      // Сообщение
+      let msg = line
+        .replace(date || '', '')
+        .replace(level || '', '')
+        .replace(/\[[^\]]+\]/g, '')
+        .replace(dashRe, '')
+        .trim();
+
+      const parts = [];
+      if (date) parts.push(`[${date}]`);
+      if (level) parts.push(`[${level}]`);
+      if (thread) parts.push(`[${thread}]`);
+      if (module) parts.push(`[${module}]`);
+      if (msg) parts.push(`[${msg}]`);
+
+      blocks.push(parts.join(' '));
     }
-    push();
 
     const out = blocks.join('\n');
     if (!out) {
@@ -86,6 +108,7 @@
     navigator.clipboard.writeText(out)
       .then(() => showSuccess("Логи скопированы"))
       .catch(() => showError("Что-то пошло не так"));
+
   } catch (e) {
     showError("Что-то пошло не так");
   }
