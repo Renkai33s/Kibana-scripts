@@ -34,101 +34,6 @@
   function showError(msg){ showMessage(msg,true,false); }
   function showSuccess(msg){ showMessage(msg,false,true); }
 
-  // --- Форматирование JSON/XML ---
-  function formatTextIfJsonXml(text){
-    if(!text) return text;
-    text = text.trim();
-
-    // JSON
-    if(text.startsWith('{') || text.startsWith('[')){
-      try{
-        const obj = JSON.parse(text);
-        return JSON.stringify(obj, null, 2);
-      }catch(e){
-        return text;
-      }
-    }
-
-    // XML / SOAP
-    if(text.startsWith('<')){
-      try{
-        const parser = new DOMParser();
-        const xmlDoc = parser.parseFromString(text, "application/xml");
-        if(xmlDoc.getElementsByTagName("parsererror").length){
-          return text;
-        }
-        function formatXml(node, indent = '') {
-          let result = '';
-          if(node.nodeType === 1){
-            result += `${indent}<${node.nodeName}`;
-            for(let attr of node.attributes) result += ` ${attr.name}="${attr.value}"`;
-            result += '>';
-            if(node.childNodes.length > 0){
-              result += '\n';
-              for(let child of node.childNodes){
-                result += formatXml(child, indent + '  ');
-              }
-              result += `${indent}</${node.nodeName}>\n`;
-            } else result += `</${node.nodeName}>\n`;
-          } else if(node.nodeType === 3){
-            if(node.nodeValue.trim()) result += indent + node.nodeValue.trim() + '\n';
-          }
-          return result;
-        }
-        return formatXml(xmlDoc.documentElement).trim();
-      }catch(e){
-        return text;
-      }
-    }
-
-    return text;
-  }
-
-  // --- Форматирование Java-style объектов ---
-  function formatJavaStyleObject(text, indent=''){
-    if(!text) return text;
-    text = text.trim();
-
-    // Если это JSON/XML, используем старый парсер
-    if(text.startsWith('{') || text.startsWith('[') || text.startsWith('<')) {
-      return formatTextIfJsonXml(text);
-    }
-
-    // Проверка на Java-style object: ClassName{...}
-    const match = text.match(/^(\w+)\{(.+)\}$/s);
-    if(!match) return text; // не Java-style
-
-    const className = match[1];
-    const content = match[2].trim();
-    let result = indent + className + ' {\n';
-
-    let buffer = '';
-    let depth = 0;
-    for(let i=0; i<content.length; i++){
-      const char = content[i];
-      if(char === '{' || char === '[') depth++;
-      if(char === '}' || char === ']') depth--;
-      if(char === ',' && depth===0){
-        result += formatJavaField(buffer.trim(), indent+'  ');
-        buffer = '';
-      } else buffer += char;
-    }
-    if(buffer.trim()) result += formatJavaField(buffer.trim(), indent+'  ');
-
-    result += indent + '}\n';
-    return result.trim();
-  }
-
-  function formatJavaField(fieldText, indent){
-    const idx = fieldText.indexOf('=');
-    if(idx<0) return indent + fieldText + '\n';
-    const key = fieldText.substring(0, idx).trim();
-    let value = fieldText.substring(idx+1).trim();
-    // рекурсивно форматируем значение
-    if(value.match(/^\w+\{.*\}$/s) || value.startsWith('[')) value = formatJavaStyleObject(value, indent+'  ');
-    return `${indent}${key} = ${value}\n`;
-  }
-
   // --- Основная логика ---
   try{
     const sel = window.getSelection();
@@ -171,10 +76,10 @@
         const line1 = [time, traceid, methodid, name].filter(Boolean).join(' ');
         if(line1) block.push(line1);
 
-        if(message) block.push(formatJavaStyleObject(message));
-        if(payload) block.push(formatJavaStyleObject(payload));
+        if(message) block.push(message);
         if(level) block.push(level);
         if(exception) block.push(exception);
+        if(payload) block.push(payload);
 
         if(block.length>0) out.push(block.join('\n'));
       }
