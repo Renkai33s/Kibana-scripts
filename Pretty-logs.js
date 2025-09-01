@@ -62,7 +62,16 @@
     const push = () => {
       if (current.length) {
         const cleaned = current.filter(l => !noiseRe.test(l));
-        if (cleaned.length) blocks.push(cleaned.join(' | '));
+
+        // сокращаем дату до 3 знаков после запятой только для строк с датой
+        const formatted = cleaned.map(l => {
+          if (dateRe.test(l)) {
+            return l.replace(/(@ \d{2}:\d{2}:\d{2}\.\d{3})\d*/, '$1');
+          }
+          return l;
+        });
+
+        if (formatted.length) blocks.push(formatted.join(' | '));
         current = [];
       }
     };
