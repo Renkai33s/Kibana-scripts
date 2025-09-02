@@ -57,6 +57,14 @@
     return formatted;
   }
 
+  // --- Pretty Print любого текста (JSON или XML) ---
+  function prettyPrintAny(str){
+    str = str.trim();
+    if(str.startsWith('{') && str.endsWith('}')) return prettyPrintJSON(str);
+    if(str.startsWith('<') && str.endsWith('>')) return prettyPrintXML(str);
+    return str;
+  }
+
   // --- Основная логика ---
   try{
     const sel = window.getSelection();
@@ -67,28 +75,23 @@
     const out = [];
 
     let currentLog = {time:'', message:'', exception:'', payload:''};
-    let bufferPayload = '';
+    let bufferField = '';
 
     lines.forEach(line=>{
       line = line.trim();
       if(!line) return;
 
-      // Определяем поля по признакам (даты, INFO/WARN/ERROR и т.д.)
       if(line.match(/^\w{3} \d{1,2}, \d{4} @ \d{2}:\d{2}:\d{2}/)) {
         // Новый лог
         if(currentLog.time) {
           // Сохраняем предыдущий
-          if(bufferPayload){
-            // pretty print JSON/XML если возможно
-            if(bufferPayload.startsWith('{') && bufferPayload.endsWith('}')){
-              currentLog.payload = prettyPrintJSON(bufferPayload);
-            } else if(bufferPayload.startsWith('<') && bufferPayload.endsWith('>')){
-              currentLog.payload = prettyPrintXML(bufferPayload);
-            } else {
-              currentLog.payload = bufferPayload;
-            }
-            bufferPayload = '';
+          if(bufferField){
+            currentLog.payload = prettyPrintAny(bufferField);
+            bufferField = '';
           }
+          // Применяем pretty print ко всем полям
+          currentLog.message = prettyPrintAny(currentLog.message);
+          currentLog.exception = prettyPrintAny(currentLog.exception);
           out.push([currentLog.time, currentLog.message, currentLog.exception, currentLog.payload].filter(Boolean).join(' | '));
           currentLog = {time:'', message:'', exception:'', payload:''};
         }
@@ -98,29 +101,24 @@
         currentLog.message = line;
       }
       else if(line.startsWith('request:') || line.startsWith('SOAP-OUT') || line.startsWith('response:')) {
-        bufferPayload += line + '\n';
+        bufferField += line + '\n';
       }
       else if(line.startsWith('-')) {
         // игнорируем разделители
       }
       else {
-        // Считаем как exception или дополнительное сообщение
         if(!currentLog.exception) currentLog.exception = line.split('\n')[0]; // только первая строка
-        else bufferPayload += line + '\n';
+        else bufferField += line + '\n';
       }
     });
 
     // Сохраняем последний лог
     if(currentLog.time) {
-      if(bufferPayload){
-        if(bufferPayload.startsWith('{') && bufferPayload.endsWith('}')){
-          currentLog.payload = prettyPrintJSON(bufferPayload);
-        } else if(bufferPayload.startsWith('<') && bufferPayload.endsWith('>')){
-          currentLog.payload = prettyPrintXML(bufferPayload);
-        } else {
-          currentLog.payload = bufferPayload;
-        }
+      if(bufferField){
+        currentLog.payload = prettyPrintAny(bufferField);
       }
+      currentLog.message = prettyPrintAny(currentLog.message);
+      currentLog.exception = prettyPrintAny(currentLog.exception);
       out.push([currentLog.time, currentLog.message, currentLog.exception, currentLog.payload].filter(Boolean).join(' | '));
     }
 
