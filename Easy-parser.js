@@ -1,33 +1,33 @@
 (function(){
   // --- Система уведомлений ---
   if(!window.__notifContainer){
-    const c = document.createElement('div');
-    c.id = 'notif-container';
-    c.style.position = 'fixed';
-    c.style.bottom = '20px';
-    c.style.right = '20px';
-    c.style.width = 'auto';
-    c.style.zIndex = 999999;
+    const c=document.createElement('div');
+    c.id='notif-container';
+    c.style.position='fixed';
+    c.style.bottom='20px';
+    c.style.right='20px';
+    c.style.width='auto';
+    c.style.zIndex=999999;
     document.body.appendChild(c);
-    window.__notifContainer = c;
-    window.__currentNotif = null;
+    window.__notifContainer=c;
+    window.__currentNotif=null;
   }
 
-  function showMessage(msg, isError=false, isSuccess=false){
+  function showMessage(msg,isError=false,isSuccess=false){
     if(window.__currentNotif){ window.__currentNotif.remove(); window.__currentNotif=null; }
-    const d = document.createElement('div');
-    d.textContent = msg;
-    d.style.padding = '10px 15px';
-    d.style.borderRadius = '8px';
-    d.style.background = isError ? '#ff4d4f' : isSuccess ? '#52c41a' : '#3498db';
-    d.style.color = 'white';
-    d.style.fontFamily = 'sans-serif';
-    d.style.fontSize = '14px';
-    d.style.minWidth = '120px';
-    d.style.textAlign = 'center';
-    d.style.boxShadow = '0 2px 6px rgba(0,0,0,0.2)';
+    const d=document.createElement('div');
+    d.textContent=msg;
+    d.style.padding='10px 15px';
+    d.style.borderRadius='8px';
+    d.style.background=isError?'#ff4d4f':isSuccess?'#52c41a':'#3498db';
+    d.style.color='white';
+    d.style.fontFamily='sans-serif';
+    d.style.fontSize='14px';
+    d.style.minWidth='120px';
+    d.style.textAlign='center';
+    d.style.boxShadow='0 2px 6px rgba(0,0,0,0.2)';
     window.__notifContainer.appendChild(d);
-    window.__currentNotif = d;
+    window.__currentNotif=d;
     setTimeout(()=>{ if(window.__currentNotif===d){ d.remove(); window.__currentNotif=null } },2000);
   }
 
@@ -35,51 +35,51 @@
   function showSuccess(msg){ showMessage(msg,false,true); }
 
   // --- Форматирование JSON / {...} / [...] с сохранением одиночных элементов ---
-  function formatNestedObject(str, indent = 0) {
-    if (!str) return str;
-    const spaces = '  '.repeat(indent);
-    let out = '', i = 0;
+  function formatNestedObject(str,indent=0){
+    if(!str) return str;
+    const spaces='  '.repeat(indent);
+    let out='',i=0;
 
-    function splitTopLevel(s) {
-      const parts = [];
-      let curr = '', depth = 0, inString = false, prev = '';
-      for (let i = 0; i < s.length; i++) {
-        const ch = s[i];
-        if (ch === '"' && prev !== '\\') inString = !inString;
-        if (!inString) {
-          if (ch === '{' || ch === '[') depth++;
-          if (ch === '}' || ch === ']') depth--;
-          if (ch === ',' && depth === 0) { parts.push(curr); curr = ''; prev = ch; continue; }
+    function splitTopLevel(s){
+      const parts=[];
+      let curr='',depth=0,inString=false,prev='';
+      for(let i=0;i<s.length;i++){
+        const ch=s[i];
+        if(ch==='"' && prev!=='\\') inString=!inString;
+        if(!inString){
+          if(ch==='{'||ch==='[') depth++;
+          if(ch==='}'||ch===']') depth--;
+          if(ch===',' && depth===0){ parts.push(curr); curr=''; prev=ch; continue; }
         }
-        curr += ch;
-        prev = ch;
+        curr+=ch;
+        prev=ch;
       }
-      if (curr) parts.push(curr);
-      return parts.map(p => p.trim()).filter(Boolean);
+      if(curr) parts.push(curr);
+      return parts.map(p=>p.trim()).filter(Boolean);
     }
 
-    while (i < str.length) {
-      const ch = str[i];
-      if (ch === '{' || ch === '[') {
-        const open = ch, close = ch === '{' ? '}' : ']';
-        let j = i+1, depth=1, inString=false, prev='';
-        while (j<str.length && depth>0) {
-          const c = str[j];
-          if (c === '"' && prev !== '\\') inString = !inString;
-          if (!inString) { if(c===open) depth++; else if(c===close) depth--; }
-          prev=c; j++;
+    while(i<str.length){
+      const ch=str[i];
+      if(ch==='{'||ch==='['){
+        const open=ch,close=ch==='{'?'}':']';
+        let j=i+1,depth=1,inString=false,prev='';
+        while(j<str.length && depth>0){
+          const c=str[j];
+          if(c==='"' && prev!=='\\') inString=!inString;
+          if(!inString){ if(c===open) depth++; else if(c===close) depth--; }
+          prev=c;j++;
         }
-        if (depth!==0) { out+=str.slice(i); break; }
+        if(depth!==0){ out+=str.slice(i); break; }
         const inner=str.slice(i+1,j-1);
         if(!inner.trim()){ out+=open+close; i=j; continue; }
 
-        const parts = splitTopLevel(inner);
-        const isSingleSimple = parts.length===1 && !/[{\[]/.test(parts[0]) && !parts[0].includes('\n');
-        if (isSingleSimple) out+=open+parts[0]+close;
-        else {
+        const parts=splitTopLevel(inner);
+        const isSingleSimple=parts.length===1 && !/[{\[]/.test(parts[0]);
+        if(isSingleSimple) out+=open+parts[0]+close;
+        else{
           out+=open+'\n';
-          for (let k=0;k<parts.length;k++){
-            out+=spaces+'  '+formatNestedObject(parts[k], indent+1);
+          for(let k=0;k<parts.length;k++){
+            out+=spaces+'  '+formatNestedObject(parts[k],indent+1);
             if(k<parts.length-1) out+=',\n'; else out+='\n';
           }
           out+=spaces+close;
@@ -90,12 +90,13 @@
     return out;
   }
 
-  // --- Универсальная обработка body / payload ---
-  function formatBody(text) {
+  // --- Форматирование body / payload ---
+  function formatBody(text){
     if(!text) return "";
 
     text=text.trim();
 
+    // JSON
     if(/^\s*[\{\[]/.test(text)){
       try{
         const parsed=JSON.parse(text);
@@ -103,11 +104,13 @@
       } catch { return text; }
     }
 
+    // XML
     if(/<[a-zA-Z]/.test(text) && />/.test(text)) return formatXML(text);
 
+    // form-urlencoded
     if(text.includes("=") && text.includes("&")){
       const parts=text.split("&");
-      if(parts.length===1) return `{${decodeURIComponent(parts[0])}}`;
+      if(parts.length===1 && !parts[0].includes('{') && !parts[0].includes('[')) return `{${decodeURIComponent(parts[0])}}`;
       return "{\n  "+parts.map(p=>{
         const [k,v]=p.split("=");
         return `${decodeURIComponent(k)}=${decodeURIComponent(v??"")}`;
@@ -128,8 +131,8 @@
           line=line.trim();
           if(!line) return '';
           let indent=0;
-          if(/^<\w[^>]*>.*<\/\w/.test(line)) indent=0;
-          else if(/^<\/\w/.test(line)) { pad--; indent=0; }
+          if(/^<\w[^>]*>.*<\/\w/.test(line)) indent=0; // одиночный тег
+          else if(/^<\/\w/.test(line)){ pad--; indent=0; }
           else if(/^<\w[^>]*[^\/]>/.test(line)) indent=1;
           const res="  ".repeat(Math.max(pad,0))+line;
           pad+=indent;
