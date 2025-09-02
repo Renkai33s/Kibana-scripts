@@ -2,6 +2,53 @@
   const wanted = ["time","message.message","message.exception","payload"];
   const norm = s => s?.trim().replace(/\s+/g," ").toLowerCase();
 
+  const sanitizeForTSV = s =>
+    s.replace(/\t/g, "  ")
+     .replace(/\r?\n/g, " ⏎ ")
+     .replace(/\s{3,}/g, " ")
+     .trim();
+
+  const tryPrettyJSON = (s) => {
+    try {
+      // быстрый фильтр чтобы не парсить всё подряд
+      const t = s.trim();
+      if (!((t.startsWith("{") && t.endsWith("}")) || (t.startsWith("[") && t.endsWith("]")))) return null;
+      const obj = JSON.parse(t);
+      return JSON.stringify(obj, null, 2);
+    } catch { return null; }
+  };
+
+  const tryPrettyXML = (s) => {
+    const t = s.trim();
+    if (!(t.startsWith("<") && t.endsWith(">"))) return null;
+    try {
+      const parts = t.replace(/>\s+</g, "><").split(/(?=<)|(?<=>)/g).filter(Boolean);
+      let indent = 0, out = [];
+      for (const p of parts) {
+        if (/^<\/[^>]+>$/.test(p)) indent = Math.max(indent - 1, 0);
+        out.push("  ".repeat(indent) + p);
+        if (/^<[^!?/][^>]*[^/]>$/.test(p)) indent++;
+      }
+      return out.join("\n");
+    } catch { return null; }
+  };
+
+  const prettyCell = (val, key) => {
+    if (!val) return ""; // пустые — не копируем
+    // special rule for message.exception: только первая строка
+    if (key === "message.exception") {
+      val = val.split(/\r?\n/)[0] || "";
+      if (!val) return "";
+    }
+    // попытка красиво отформатировать код
+    const asJSON = tryPrettyJSON(val);
+    if (asJSON) return sanitizeForTSV(asJSON);
+    const asXML = tryPrettyXML(val);
+    if (asXML) return sanitizeForTSV(asXML);
+    // обычный текст
+    return sanitizeForTSV(val);
+  };
+
   const sel = window.getSelection();
   if (!sel || sel.rangeCount === 0) {
     alert("Нет текстового выделения. Выдели строки таблицы и попробуй снова.");
@@ -29,9 +76,8 @@
       const tds = Array.from(tr.querySelectorAll("td, th"));
       return wanted.map(w => {
         const i = idxMap.get(norm(w));
-        let val = (i != null && tds[i]) ? tds[i].innerText.trim() : "";
-        if (w === "message.exception") val = val.split(/\r?\n/)[0] || "";
-        return val;
+        let val = (i != null && tds[i]) ? tds[i].innerText : "";
+        return prettyCell(val, w);
       });
     });
   };
@@ -54,8 +100,8 @@
     return;
   }
 
-  // формируем строки (пустые ячейки остаются пустыми)
-  const lines = rows.map(r => r.map(v => v.replace(/\r?\n+/g," ").trim()).join("\t"));
+  // формируем TSV без заголовка
+  const lines = rows.map(r => r.join("\t"));
   const tsv = lines.join("\n");
 
   const copyTSV = async text => {
