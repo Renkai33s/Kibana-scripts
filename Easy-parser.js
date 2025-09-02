@@ -34,34 +34,41 @@
   function showError(msg){ showMessage(msg,true,false); }
   function showSuccess(msg){ showMessage(msg,false,true); }
 
-  // --- Pretty Print для JSON, XML, URL-encoded ---
-  function prettyFormat(str){
+  // --- Pretty Print для частичных JSON, XML, URL-encoded ---
+  function prettyPartial(str){
     if(!str) return str;
 
-    // JSON
-    try {
-      const obj = JSON.parse(str);
-      return JSON.stringify(obj, null, 2);
-    } catch(e){}
+    // --- JSON фрагменты ---
+    str = str.replace(/({[\s\S]*?})/g, (match)=>{
+      try{
+        const obj = JSON.parse(match);
+        return JSON.stringify(obj, null, 2);
+      } catch(e){ return match; }
+    });
 
-    // XML
-    try {
-      const parser = new DOMParser();
-      const xmlDoc = parser.parseFromString(str, "application/xml");
-      if(!xmlDoc.querySelector("parsererror")){
-        const serializer = new XMLSerializer();
-        const xmlStr = serializer.serializeToString(xmlDoc);
-        return xmlStr.replace(/></g, '>\n<');
-      }
-    } catch(e){}
+    // --- XML фрагменты ---
+    str = str.replace(/(<[?\/]?[a-zA-Z][^>]*>[\s\S]*?<\/[a-zA-Z][^>]*>)/g, (match)=>{
+      try{
+        const parser = new DOMParser();
+        const xmlDoc = parser.parseFromString(match, "application/xml");
+        if(!xmlDoc.querySelector("parsererror")){
+          const serializer = new XMLSerializer();
+          return serializer.serializeToString(xmlDoc).replace(/></g, '>\n<');
+        }
+      } catch(e){}
+      return match;
+    });
 
-    // URL-encoded
-    try {
-      const decoded = decodeURIComponent(str);
-      if(decoded !== str){
-        return decoded.replace(/&/g, '\n');
-      }
-    } catch(e){}
+    // --- URL-encoded ---
+    str = str.replace(/([a-zA-Z0-9%]+=[^&\s]+(&[a-zA-Z0-9%]+=[^&\s]+)*)/g, (match)=>{
+      try{
+        const decoded = decodeURIComponent(match);
+        if(decoded !== match){
+          return decoded.replace(/&/g, '\n');
+        }
+      } catch(e){}
+      return match;
+    });
 
     return str;
   }
@@ -94,10 +101,10 @@
         }
 
         const time = getCellText('time');
-        const message = prettyFormat(getCellText('message.message'));
+        const message = prettyPartial(getCellText('message.message'));
         let exception = getCellText('message.exception');
-        if(exception) exception = prettyFormat(exception.split('\n')[0]);
-        const payload = prettyFormat(getCellText('payload'));
+        if(exception) exception = prettyPartial(exception.split('\n')[0]);
+        const payload = prettyPartial(getCellText('payload'));
 
         const line = [time, message, exception, payload].filter(Boolean).join(' | ');
         if(line) out.push(line);
