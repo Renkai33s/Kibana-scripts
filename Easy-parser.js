@@ -34,156 +34,157 @@
   function showError(msg){ showMessage(msg,true,false); }
   function showSuccess(msg){ showMessage(msg,false,true); }
 
-  function splitTopLevel(str) {
-    const parts = [];
-    let curr = '';
-    let depth = 0;
-    let inString = false;
-    let prev = '';
-    for (let i = 0; i < str.length; i++) {
-      const ch = str[i];
-      if (ch === '"' && prev !== '\\') {
-        inString = !inString;
-        curr += ch;
-        prev = ch;
-        continue;
-      }
-      if (!inString) {
-        if (ch === '{' || ch === '[') depth++;
-        else if (ch === '}' || ch === ']') depth--;
-        if (ch === ',' && depth === 0) {
-          parts.push(curr);
-          curr = '';
-          prev = ch;
-          continue;
-        }
-      }
-      curr += ch;
-      prev = ch;
-    }
-    if (curr.length > 0) parts.push(curr);
-    return parts.map(p => p.trim()).filter(p => !(p === '' && parts.length === 1 && str.trim() === ''));
-  }
-
+  // --- Форматирование JSON / {...} / [...] с сохранением одиночных элементов ---
   function formatNestedObject(str, indent = 0) {
     if (!str) return str;
     const spaces = '  '.repeat(indent);
-    let out = '';
-    let i = 0;
+    let out = '', i = 0;
+
+    function splitTopLevel(s) {
+      const parts = [];
+      let curr = '', depth = 0, inString = false, prev = '';
+      for (let i = 0; i < s.length; i++) {
+        const ch = s[i];
+        if (ch === '"' && prev !== '\\') inString = !inString;
+        if (!inString) {
+          if (ch === '{' || ch === '[') depth++;
+          if (ch === '}' || ch === ']') depth--;
+          if (ch === ',' && depth === 0) { parts.push(curr); curr = ''; prev = ch; continue; }
+        }
+        curr += ch;
+        prev = ch;
+      }
+      if (curr) parts.push(curr);
+      return parts.map(p => p.trim()).filter(Boolean);
+    }
 
     while (i < str.length) {
       const ch = str[i];
-
       if (ch === '{' || ch === '[') {
-        const open = ch;
-        const close = (ch === '{') ? '}' : ']';
-        let j = i + 1;
-        let depth = 1;
-        let inString = false;
-        let prev = '';
-        while (j < str.length && depth > 0) {
+        const open = ch, close = ch === '{' ? '}' : ']';
+        let j = i+1, depth=1, inString=false, prev='';
+        while (j<str.length && depth>0) {
           const c = str[j];
           if (c === '"' && prev !== '\\') inString = !inString;
-          if (!inString) {
-            if (c === open) depth++;
-            else if (c === close) depth--;
-          }
-          prev = c;
-          j++;
+          if (!inString) { if(c===open) depth++; else if(c===close) depth--; }
+          prev=c; j++;
         }
-        if (depth !== 0) { out += str.slice(i); break; }
-
-        const inner = str.slice(i + 1, j - 1);
-        if (inner.trim() === '') {
-          out += open + close;
-          i = j;
-          continue;
-        }
+        if (depth!==0) { out+=str.slice(i); break; }
+        const inner=str.slice(i+1,j-1);
+        if(!inner.trim()){ out+=open+close; i=j; continue; }
 
         const parts = splitTopLevel(inner);
-        const isSingleSimple = parts.length === 1 && !/[{\[]/.test(parts[0]) && !parts[0].includes('\n');
-
-        if (isSingleSimple) {
-          out += open + parts[0].trim() + close;
-        } else {
-          out += open + '\n';
-          for (let k = 0; k < parts.length; k++) {
-            const p = parts[k];
-            out += spaces + '  ' + formatNestedObject(p, indent + 1);
-            if (k < parts.length - 1) out += ',\n';
-            else out += '\n';
+        const isSingleSimple = parts.length===1 && !/[{\[]/.test(parts[0]) && !parts[0].includes('\n');
+        if (isSingleSimple) out+=open+parts[0]+close;
+        else {
+          out+=open+'\n';
+          for (let k=0;k<parts.length;k++){
+            out+=spaces+'  '+formatNestedObject(parts[k], indent+1);
+            if(k<parts.length-1) out+=',\n'; else out+='\n';
           }
-          out += spaces + close;
+          out+=spaces+close;
         }
-        i = j;
-      } else {
-        out += ch;
-        i++;
-      }
+        i=j;
+      } else { out+=ch; i++; }
     }
     return out;
   }
 
-  function formatXML(xml) {
-    if(!xml) return xml;
-    let formatted = '';
-    let indent = 0;
-    const reg = /(>)(<)(\/*)/g;
-    xml = xml.replace(reg, '$1\n$2$3');
-    const lines = xml.split('\n');
-    lines.forEach(line => {
-      if(line.match(/^<\/\w/)) indent--;
-      const safeIndent = Math.max(indent, 0);
-      formatted += '  '.repeat(safeIndent) + line + '\n';
-      if(line.match(/^<[^\/!?][^>]*[^\/]>$/)) indent++;
-    });
-    return formatted.trim();
+  // --- Универсальная обработка body / payload ---
+  function formatBody(text) {
+    if(!text) return "";
+
+    text=text.trim();
+
+    if(/^\s*[\{\[]/.test(text)){
+      try{
+        const parsed=JSON.parse(text);
+        return formatNestedObject(JSON.stringify(parsed));
+      } catch { return text; }
+    }
+
+    if(/<[a-zA-Z]/.test(text) && />/.test(text)) return formatXML(text);
+
+    if(text.includes("=") && text.includes("&")){
+      const parts=text.split("&");
+      if(parts.length===1) return `{${decodeURIComponent(parts[0])}}`;
+      return "{\n  "+parts.map(p=>{
+        const [k,v]=p.split("=");
+        return `${decodeURIComponent(k)}=${decodeURIComponent(v??"")}`;
+      }).join(",\n  ")+"\n}";
+    }
+
+    return text;
   }
 
+  // --- Форматирование XML с учётом одиночных тегов ---
+  function formatXML(xml){
+    try{
+      const reg=/(>)(<)(\/*)/g;
+      let pad=0;
+      return xml.replace(reg,"$1\n$2$3")
+        .split("\n")
+        .map(line=>{
+          line=line.trim();
+          if(!line) return '';
+          let indent=0;
+          if(/^<\w[^>]*>.*<\/\w/.test(line)) indent=0;
+          else if(/^<\/\w/.test(line)) { pad--; indent=0; }
+          else if(/^<\w[^>]*[^\/]>/.test(line)) indent=1;
+          const res="  ".repeat(Math.max(pad,0))+line;
+          pad+=indent;
+          return res;
+        })
+        .filter(Boolean)
+        .join("\n");
+    } catch { return xml; }
+  }
+
+  // --- Основная логика ---
   try{
-    const sel = window.getSelection();
+    const sel=window.getSelection();
     if(!sel || sel.rangeCount===0 || !sel.toString().trim()){ showError("Логи не выделены"); return; }
 
-    const noiseRe = /^(INFO|DEBUG|WARN|WARNING|ERROR|TRACE|-|–|—)$/i;
-    const trs = Array.from(document.querySelectorAll('tr'));
-    const out = [];
+    const noiseRe=/^(INFO|DEBUG|WARN|WARNING|ERROR|TRACE|-|–|—)$/i;
+    const trs=Array.from(document.querySelectorAll('tr'));
+    const out=[];
 
     trs.forEach(tr=>{
-      const cells = Array.from(tr.querySelectorAll('td,th'));
-      const selected = cells.filter(td=>sel.containsNode(td,true));
+      const cells=Array.from(tr.querySelectorAll('td,th'));
+      const selected=cells.filter(td=>sel.containsNode(td,true));
       if(selected.length>0){
-        const table = tr.closest('table');
-        const headerRow = table.querySelector('thead tr') || Array.from(table.querySelectorAll('tr')).find(rw=>rw.querySelectorAll('th').length>0) || table.querySelector('tr');
-        const ths = Array.from(headerRow.querySelectorAll('th,td'));
+        const table=tr.closest('table');
+        const headerRow=table.querySelector('thead tr') || Array.from(table.querySelectorAll('tr')).find(rw=>rw.querySelectorAll('th').length>0) || table.querySelector('tr');
+        const ths=Array.from(headerRow.querySelectorAll('th,td'));
 
         function getCellText(key){
-          const idx = ths.findIndex(th=>th.textContent.trim().toLowerCase()===key);
+          const idx=ths.findIndex(th=>th.textContent.trim().toLowerCase()===key);
           if(idx>=0){
-            const td = cells[idx];
-            if(td && td.textContent.trim() && !noiseRe.test(td.textContent.trim()) && sel.containsNode(td,true)) {
-              let val = td.textContent.trim();
-              if(key === 'message.exception'){ val = val.split('\n')[0]; }
-              if(/[{\[]/.test(val)) { val = formatNestedObject(val, 0); }
-              if(/<[^>]+>/.test(val)) { val = formatXML(val); }
+            const td=cells[idx];
+            if(td && td.textContent.trim() && !noiseRe.test(td.textContent.trim()) && sel.containsNode(td,true)){
+              let val=td.textContent.trim();
+              if(key==="message.exception") val=val.split("\n")[0];
+              if(["payload","body"].includes(key)) val=formatBody(val);
               return val;
             }
           }
           return null;
         }
 
-        const time = getCellText('time');
-        const message = getCellText('message.message');
-        const exception = getCellText('message.exception');
-        const payload = getCellText('payload');
+        const time=getCellText('time');
+        const message=getCellText('message.message');
+        const exception=getCellText('message.exception');
+        const payload=getCellText('payload');
+        const body=getCellText('body');
 
-        const block = [time, message, exception, payload].filter(Boolean).join('  ');
-        if(block) out.push(block);
+        const parts=[time,message,exception,payload,body].filter(Boolean);
+        if(parts.length>0) out.push(parts.join("  "));
       }
     });
 
     if(out.length===0){ showError("Нет полезных логов для копирования"); return; }
 
-    navigator.clipboard.writeText(out.join('\n'))
+    navigator.clipboard.writeText(out.join("\n"))
       .then(()=>showSuccess("Логи скопированы"))
       .catch(()=>showError("Ошибка при копировании"));
 
