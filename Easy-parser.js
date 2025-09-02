@@ -34,37 +34,37 @@
   function showError(msg){ showMessage(msg,true,false); }
   function showSuccess(msg){ showMessage(msg,false,true); }
 
-  // --- Pretty Print функции ---
-  function tryPrettyPrint(str){
-    if(!str) return str;
+  // --- Pretty print для строки ---
+  function prettyPrint(value){
+    if(!value) return value;
+    value = value.trim();
 
-    str = str.trim();
-
-    // 1. JSON
+    // Попытка распарсить JSON
     try {
-      const obj = JSON.parse(str);
-      return JSON.stringify(obj, null, 2);
+      const json = JSON.parse(value);
+      return JSON.stringify(json, null, 2);
     } catch(e){}
 
-    // 2. URL-encoded
+    // Попытка распарсить URL-encoded
     try {
-      const decoded = decodeURIComponent(str);
-      if(decoded !== str) return decoded;
+      const decoded = decodeURIComponent(value);
+      // если раскодированное отличается от исходного, используем его
+      if(decoded !== value) return decoded;
     } catch(e){}
 
-    // 3. XML (простейшее форматирование)
-    if(str.startsWith('<') && str.endsWith('>')){
-      try {
+    // Попытка форматировать XML
+    if(value.startsWith('<') && value.endsWith('>')){
+      try{
         const parser = new DOMParser();
-        const xmlDoc = parser.parseFromString(str, 'application/xml');
+        const xmlDoc = parser.parseFromString(value, "application/xml");
         const serializer = new XMLSerializer();
         const xmlStr = serializer.serializeToString(xmlDoc);
-        // простой pretty print с отступами
-        return xmlStr.replace(/(>)(<)(\/*)/g, '$1\n$2$3');
+        // простой pretty print: добавим отступы через replace
+        return xmlStr.replace(/></g, '>\n<');
       } catch(e){}
     }
 
-    return str; // если ни одно не сработало
+    return value; // если ни одно не подошло, возвращаем как есть
   }
 
   // --- Основная логика ---
@@ -94,11 +94,11 @@
           return null;
         }
 
-        const time = getCellText('time');
-        const message = tryPrettyPrint(getCellText('message.message'));
-        let exception = tryPrettyPrint(getCellText('message.exception'));
-        if(exception) exception = exception.split('\n')[0]; // только первая строка
-        const payload = tryPrettyPrint(getCellText('payload'));
+        const time = prettyPrint(getCellText('time'));
+        const message = prettyPrint(getCellText('message.message'));
+        let exception = getCellText('message.exception');
+        if(exception) exception = prettyPrint(exception.split('\n')[0]); // только первая строка
+        const payload = prettyPrint(getCellText('payload'));
 
         // Формат с разделителем "|": time | message | exception | payload
         const line = [time, message, exception, payload].filter(Boolean).join(' | ');
