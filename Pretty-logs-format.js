@@ -124,7 +124,7 @@
     };
 
     const sel = window.getSelection();
-    if (!sel || sel.rangeCount === 0) { showError("Нет текстового выделения. Выдели строки таблицы и попробуй снова."); return; }
+    if (!sel || sel.rangeCount === 0) { showError("Строка логов не выделена"); return; }
 
     const allTr = Array.from(document.querySelectorAll("tr"));
     const selectedTr = allTr.filter(tr => sel.containsNode(tr, true));
@@ -193,7 +193,7 @@
       if (fbTable && buildIdxMapFromTable(fbTable)) rows = extractFromTable(fbTable, [anchorTr]);
     }
 
-    if (!rows.length) { showError("Не удалось найти данные. Убедись, что выделены строки и есть колонки time, message.message, message.exception, payload."); return; }
+    if (!rows.length) { showError("Не удалось найти полезные логи"); return; }
 
     // Разделитель между столбцами — один пробел
     const lines = rows
@@ -217,7 +217,7 @@
       console.log(result);
       showError("Не получилось скопировать в буфер. Результат выведен в консоль.");
     } else {
-      showSuccess(`Скопировано ${lines.length} строк (разделитель: пробел).`);
+      showSuccess("Логи скопированы");
     }
   } catch (e) {
     console.error(e);
