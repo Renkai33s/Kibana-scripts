@@ -34,60 +34,105 @@
   function showError(msg){ showMessage(msg,true,false); }
   function showSuccess(msg){ showMessage(msg,false,true); }
 
+  // --- Pretty Print JSON ---
   function prettyPrintJSON(str){
     try { return JSON.stringify(JSON.parse(str), null, 2); }
-    catch(e) { return str; } // если не JSON — возвращаем как есть
+    catch(e){ return str; }
   }
 
-  function prettyPrintXML(str){
-    try {
-      const parser = new DOMParser();
-      const xmlDoc = parser.parseFromString(str, "application/xml");
-      const serializer = new XMLSerializer();
-      return vkbeautify.xml(serializer.serializeToString(xmlDoc)); // используем vkbeautify для отступов
-    } catch(e) { return str; }
+  // --- Pretty Print XML (встроенный мини вариант) ---
+  function prettyPrintXML(xml){
+    let formatted = '';
+    const reg = /(>)(<)(\/*)/g;
+    xml = xml.replace(reg, '$1\r\n$2$3');
+    let pad = 0;
+    xml.split('\r\n').forEach(node=>{
+      let indent = '';
+      if(node.match(/.+<\/\w[^>]*>$/)) indent = '  '.repeat(pad);
+      else if(node.match(/^<\/\w/)) { pad = Math.max(pad-1,0); indent = '  '.repeat(pad); }
+      else if(node.match(/^<\w([^>]*[^\/])?>.*$/)) { indent = '  '.repeat(pad); pad++; }
+      else indent = '  '.repeat(pad);
+      formatted += indent + node + '\n';
+    });
+    return formatted;
   }
 
-  // Вставляем vkbeautify в скрипт
-  function loadVkBeautify(callback){
-    const s = document.createElement('script');
-    s.src = 'https://cdnjs.cloudflare.com/ajax/libs/vkbeautify/0.99.00/vkbeautify.js';
-    s.onload = callback;
-    document.head.appendChild(s);
-  }
+  // --- Основная логика ---
+  try{
+    const sel = window.getSelection();
+    if(!sel || sel.rangeCount===0 || !sel.toString().trim()){ showError("Логи не выделены"); return; }
 
-  loadVkBeautify(()=>{
-    try{
-      const sel = window.getSelection();
-      if(!sel || sel.rangeCount===0 || !sel.toString().trim()){ showError("Логи не выделены"); return; }
+    const text = sel.toString();
+    const lines = text.split(/\r?\n/);
+    const out = [];
 
-      const text = sel.toString();
-      const lines = text.split(/\r?\n/).filter(Boolean);
+    let currentLog = {time:'', message:'', exception:'', payload:''};
+    let bufferPayload = '';
 
-      const out = [];
+    lines.forEach(line=>{
+      line = line.trim();
+      if(!line) return;
 
-      let buffer = '';
-      lines.forEach(line=>{
-        line = line.trim();
-        // Пытаемся распарсить как JSON
-        if(line.startsWith('{') && line.endsWith('}')){
-          buffer += prettyPrintJSON(line) + '\n';
+      // Определяем поля по признакам (даты, INFO/WARN/ERROR и т.д.)
+      if(line.match(/^\w{3} \d{1,2}, \d{4} @ \d{2}:\d{2}:\d{2}/)) {
+        // Новый лог
+        if(currentLog.time) {
+          // Сохраняем предыдущий
+          if(bufferPayload){
+            // pretty print JSON/XML если возможно
+            if(bufferPayload.startsWith('{') && bufferPayload.endsWith('}')){
+              currentLog.payload = prettyPrintJSON(bufferPayload);
+            } else if(bufferPayload.startsWith('<') && bufferPayload.endsWith('>')){
+              currentLog.payload = prettyPrintXML(bufferPayload);
+            } else {
+              currentLog.payload = bufferPayload;
+            }
+            bufferPayload = '';
+          }
+          out.push([currentLog.time, currentLog.message, currentLog.exception, currentLog.payload].filter(Boolean).join(' | '));
+          currentLog = {time:'', message:'', exception:'', payload:''};
         }
-        // Пытаемся распарсить как XML
-        else if(line.startsWith('<') && line.endsWith('>')){
-          buffer += prettyPrintXML(line) + '\n';
+        currentLog.time = line;
+      }
+      else if(line.startsWith('INFO') || line.startsWith('DEBUG') || line.startsWith('WARN') || line.startsWith('ERROR')) {
+        currentLog.message = line;
+      }
+      else if(line.startsWith('request:') || line.startsWith('SOAP-OUT') || line.startsWith('response:')) {
+        bufferPayload += line + '\n';
+      }
+      else if(line.startsWith('-')) {
+        // игнорируем разделители
+      }
+      else {
+        // Считаем как exception или дополнительное сообщение
+        if(!currentLog.exception) currentLog.exception = line.split('\n')[0]; // только первая строка
+        else bufferPayload += line + '\n';
+      }
+    });
+
+    // Сохраняем последний лог
+    if(currentLog.time) {
+      if(bufferPayload){
+        if(bufferPayload.startsWith('{') && bufferPayload.endsWith('}')){
+          currentLog.payload = prettyPrintJSON(bufferPayload);
+        } else if(bufferPayload.startsWith('<') && bufferPayload.endsWith('>')){
+          currentLog.payload = prettyPrintXML(bufferPayload);
         } else {
-          buffer += line + '\n';
+          currentLog.payload = bufferPayload;
         }
-      });
-
-      navigator.clipboard.writeText(buffer.trim())
-        .then(()=>showSuccess("Логи скопированы с форматированием"))
-        .catch(()=>showError("Ошибка при копировании"));
-
-    } catch(e){
-      console.error(e);
-      showError("Что-то пошло не так");
+      }
+      out.push([currentLog.time, currentLog.message, currentLog.exception, currentLog.payload].filter(Boolean).join(' | '));
     }
-  });
+
+    if(out.length===0){ showError("Нет полезных логов для копирования"); return; }
+
+    navigator.clipboard.writeText(out.join('\n'))
+      .then(()=>showSuccess("Логи скопированы с форматированием"))
+      .catch(()=>showError("Ошибка при копировании"));
+
+  } catch(e){
+    console.error(e);
+    showError("Что-то пошло не так");
+  }
+
 })();
