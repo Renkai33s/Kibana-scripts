@@ -41,17 +41,9 @@
     }, 2000);
   }
 
-  function showError(msg) {
-    showMessage(msg, true, false);
-  }
-
-  function showSuccess(msg) {
-    showMessage(msg, false, true);
-  }
-
-  function showLimit(msg) {
-    showMessage(msg, false, true);
-  }
+  function showError(msg) { showMessage(msg, true, false); }
+  function showSuccess(msg) { showMessage(msg, false, true); }
+  function showLimit(msg) { showMessage(msg, false, true); }
 
   // --- Вспомогательные ---
   function x(xpath) {
@@ -83,37 +75,61 @@
   const tracesBtnXPath =
     "/html/body/div[1]/div/div/div/div[2]/div/div/div/div/div[1]/div/div/div/div[2]/div/div[2]/div[1]/div[1]/div/div/div[3]/div/div/button";
 
-  function getTracesFromTable(traceIdx) {
+  // >>> Изменено: поддержка лимита при сборе из таблицы
+  function getTracesFromTable(traceIdx, limit = Infinity) {
     const table = x(tableXPath);
     if (!table) return [];
-    let traces = [];
-    table.querySelectorAll("tbody tr").forEach((row) => {
+    const seen = new Set();
+    const traces = [];
+    const rows = table.querySelectorAll("tbody tr");
+    for (const row of rows) {
       const val = row.children[traceIdx]?.innerText.trim();
-      if (val && val !== "-") traces.push(val);
-    });
-    return [...new Set(traces)];
+      if (val && val !== "-" && !seen.has(val)) {
+        seen.add(val);
+        traces.push(val);
+        if (traces.length >= limit) break; // стоп по лимиту
+      }
+    }
+    return traces;
   }
 
   function getTracesFromPopover() {
     const popover = document.querySelector(".dscSidebarItem__fieldPopoverPanel");
     if (!popover) return [];
-    let traces = [];
+    const seen = new Set();
+    const traces = [];
     popover
       .querySelectorAll(
         '[data-test-subj="fieldVisualizeBucketContainer"] .euiText[title]'
       )
       .forEach((el) => {
-        traces.push(el.innerText.trim());
+        const v = el.innerText.trim();
+        if (v && !seen.has(v)) {
+          seen.add(v);
+          traces.push(v);
+        }
       });
-    return [...new Set(traces)];
+    return traces;
   }
 
+  // >>> Изменено: жёсткий срез до 20 внутри insertAndRun
   function insertAndRun(traces, tLimit = false) {
-    if (traces.length === 0) {
+    const LIMIT = 20;
+    if (!Array.isArray(traces)) traces = [];
+    // уникализируем и режем
+    const uniq = Array.from(new Set(traces));
+    let payload = uniq;
+    if (uniq.length > LIMIT) {
+      payload = uniq.slice(0, LIMIT);
+      tLimit = true; // показываем уведомление о лимите
+    }
+
+    if (payload.length === 0) {
       showError("Трейсы не найдены");
       return;
     }
-    const value = "(" + traces.map((t) => `"${t}"`).join(" ") + ")";
+
+    const value = "(" + payload.map((t) => `"${t}"`).join(" ") + ")";
     const textarea = x(textareaXPath);
     if (textarea) {
       let setter = Object.getOwnPropertyDescriptor(
@@ -193,7 +209,8 @@
 
     return {
       update: function (val) {
-        textEl.textContent = val + " трейсов";
+        // можно показывать минимум из val и 20, чтобы не путать пользователя
+        textEl.textContent = Math.min(val, 20) + " трейсов";
       },
       remove: function () {
         box.remove();
@@ -226,6 +243,7 @@
       scrollable.scrollTop = scrollable.scrollHeight;
       didScrollDown = true;
 
+      // собираем без лимита, insertAndRun отрежет до 20
       let traces = getTracesFromTable(traceIdx);
       prog && prog.update(traces.length);
 
@@ -268,6 +286,7 @@
   const tracesBtn = x(tracesBtnXPath);
 
   if (cnt <= 50) {
+    // >>> тут было переполнение — теперь insertAndRun сам отрежет до 20
     insertAndRun(getTracesFromTable(traceIdx));
   } else if (tracesBtn) {
     tracesBtn.click();
