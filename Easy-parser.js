@@ -34,71 +34,112 @@
   function showError(msg){ showMessage(msg,true,false); }
   function showSuccess(msg){ showMessage(msg,false,true); }
 
-  // --- Форматирование ---
-  function formatXML(xml) {
-    try {
-      const PADDING = "  ";
-      const reg = /(>)(<)(\/*)/g;
-      let pad = 0;
-      return xml.replace(reg, "$1\n$2$3")
-        .split("\n")
-        .map((node) => {
-          let indent = 0;
-          if (node.match(/.+<\/\w[^>]*>$/)) {
-            indent = 0;
-          } else if (node.match(/^<\/\w/)) {
-            if (pad > 0) pad -= 1;
-          } else if (node.match(/^<\w[^>]*[^\/]>.*$/)) {
-            indent = 1;
-          }
-          const line = PADDING.repeat(pad) + node;
-          pad += indent;
-          return line;
-        })
-        .join("\n");
-    } catch {
-      return xml;
+  function splitTopLevel(str) {
+    const parts = [];
+    let curr = '';
+    let depth = 0;
+    let inString = false;
+    let prev = '';
+    for (let i = 0; i < str.length; i++) {
+      const ch = str[i];
+      if (ch === '"' && prev !== '\\') {
+        inString = !inString;
+        curr += ch;
+        prev = ch;
+        continue;
+      }
+      if (!inString) {
+        if (ch === '{' || ch === '[') depth++;
+        else if (ch === '}' || ch === ']') depth--;
+        if (ch === ',' && depth === 0) {
+          parts.push(curr);
+          curr = '';
+          prev = ch;
+          continue;
+        }
+      }
+      curr += ch;
+      prev = ch;
     }
+    if (curr.length > 0) parts.push(curr);
+    return parts.map(p => p.trim()).filter(p => !(p === '' && parts.length === 1 && str.trim() === ''));
   }
 
-  function formatBody(text) {
-    if (!text) return "";
+  function formatNestedObject(str, indent = 0) {
+    if (!str) return str;
+    const spaces = '  '.repeat(indent);
+    let out = '';
+    let i = 0;
 
-    text = text.trim();
+    while (i < str.length) {
+      const ch = str[i];
 
-    // JSON
-    if (/^\s*[\{\[]/.test(text)) {
-      try {
-        return JSON.stringify(JSON.parse(text), null, 2);
-      } catch {
-        return text;
+      if (ch === '{' || ch === '[') {
+        const open = ch;
+        const close = (ch === '{') ? '}' : ']';
+        let j = i + 1;
+        let depth = 1;
+        let inString = false;
+        let prev = '';
+        while (j < str.length && depth > 0) {
+          const c = str[j];
+          if (c === '"' && prev !== '\\') inString = !inString;
+          if (!inString) {
+            if (c === open) depth++;
+            else if (c === close) depth--;
+          }
+          prev = c;
+          j++;
+        }
+        if (depth !== 0) { out += str.slice(i); break; }
+
+        const inner = str.slice(i + 1, j - 1);
+        if (inner.trim() === '') {
+          out += open + close;
+          i = j;
+          continue;
+        }
+
+        const parts = splitTopLevel(inner);
+        const isSingleSimple = parts.length === 1 && !/[{\[]/.test(parts[0]) && !parts[0].includes('\n');
+
+        if (isSingleSimple) {
+          out += open + parts[0].trim() + close;
+        } else {
+          out += open + '\n';
+          for (let k = 0; k < parts.length; k++) {
+            const p = parts[k];
+            out += spaces + '  ' + formatNestedObject(p, indent + 1);
+            if (k < parts.length - 1) out += ',\n';
+            else out += '\n';
+          }
+          out += spaces + close;
+        }
+        i = j;
+      } else {
+        out += ch;
+        i++;
       }
     }
-
-    // XML
-    if (/<[a-zA-Z]/.test(text) && />/.test(text)) {
-      return formatXML(text);
-    }
-
-    // form-urlencoded
-    if (text.includes("=") && text.includes("&")) {
-      return "{\n  " + text
-        .split("&")
-        .map(p => {
-          const [k, v] = p.split("=");
-          try {
-            return `${decodeURIComponent(k)}=${decodeURIComponent(v ?? "")}`;
-          } catch {
-            return `${k}=${v ?? ""}`;
-          }
-        })
-        .join(",\n  ") + "\n}";
-    }
-
-    return text;
+    return out;
   }
 
-  // --- Основная логика ---
+  function formatXML(xml) {
+    if(!xml) return xml;
+    let formatted = '';
+    let indent = 0;
+    const reg = /(>)(<)(\/*)/g;
+    xml = xml.replace(reg, '$1\n$2$3');
+    const lines = xml.split('\n');
+    lines.forEach(line => {
+      if(line.match(/^<\/\w/)) indent--;
+      const safeIndent = Math.max(indent, 0);
+      formatted += '  '.repeat(safeIndent) + line + '\n';
+      if(line.match(/^<[^\/!?][^>]*[^\/]>$/)) indent++;
+    });
+    return formatted.trim();
+  }
+
   try{
     const sel = window.getSelection();
     if(!sel || sel.rangeCount===0 || !sel.toString().trim()){ showError("Логи не выделены"); return; }
@@ -119,14 +160,11 @@
           const idx = ths.findIndex(th=>th.textContent.trim().toLowerCase()===key);
           if(idx>=0){
             const td = cells[idx];
-            if(td && td.textContent.trim() && !noiseRe.test(td.textContent.trim()) && sel.containsNode(td,true)){
+            if(td && td.textContent.trim() && !noiseRe.test(td.textContent.trim()) && sel.containsNode(td,true)) {
               let val = td.textContent.trim();
-              if (key === "message.exception") {
-                val = val.split("\n")[0]; // только первая строка
-              }
-              if (["payload","body"].includes(key)) {
-                val = formatBody(val);
-              }
+              if(key === 'message.exception'){ val = val.split('\n')[0]; }
+              if(/[{\[]/.test(val)) { val = formatNestedObject(val, 0); }
+              if(/<[^>]+>/.test(val)) { val = formatXML(val); }
               return val;
             }
           }
@@ -137,16 +175,15 @@
         const message = getCellText('message.message');
         const exception = getCellText('message.exception');
         const payload = getCellText('payload');
-        const body = getCellText('body');
 
-        const parts = [time, message, exception, payload, body].filter(Boolean);
-        if(parts.length>0) out.push(parts.join("  "));
+        const block = [time, message, exception, payload].filter(Boolean).join('  ');
+        if(block) out.push(block);
       }
     });
 
     if(out.length===0){ showError("Нет полезных логов для копирования"); return; }
 
-    navigator.clipboard.writeText(out.join("\n"))
+    navigator.clipboard.writeText(out.join('\n'))
       .then(()=>showSuccess("Логи скопированы"))
       .catch(()=>showError("Ошибка при копировании"));
 
