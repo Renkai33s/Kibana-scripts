@@ -34,7 +34,6 @@
   function showError(msg){ showMessage(msg,true,false); }
   function showSuccess(msg){ showMessage(msg,false,true); }
 
-  // --- Утилита: разделение верхнего уровня по запятым (учитывает кавычки и вложенности) ---
   function splitTopLevel(str) {
     const parts = [];
     let curr = '';
@@ -63,11 +62,9 @@
       prev = ch;
     }
     if (curr.length > 0) parts.push(curr);
-    // trim each part
     return parts.map(p => p.trim()).filter(p => !(p === '' && parts.length === 1 && str.trim() === ''));
   }
 
-  // --- Форматирование вложенных структур {…} и […] (парсерный вариант) ---
   function formatNestedObject(str, indent = 0) {
     if (!str) return str;
     const spaces = '  '.repeat(indent);
@@ -80,7 +77,6 @@
       if (ch === '{' || ch === '[') {
         const open = ch;
         const close = (ch === '{') ? '}' : ']';
-        // найти соответствующую закрывающую скобку, учитывая строки в кавычках
         let j = i + 1;
         let depth = 1;
         let inString = false;
@@ -95,14 +91,9 @@
           prev = c;
           j++;
         }
-        // если не нашли закрывающую, просто добавим оставшуюся часть и выйдем
-        if (depth !== 0) {
-          out += str.slice(i);
-          break;
-        }
+        if (depth !== 0) { out += str.slice(i); break; }
 
         const inner = str.slice(i + 1, j - 1);
-        // пустой блок -> "[]" или "{}"
         if (inner.trim() === '') {
           out += open + close;
           i = j;
@@ -110,8 +101,6 @@
         }
 
         const parts = splitTopLevel(inner);
-
-        // если ровно один топ-уровневый элемент и он не содержит вложенных скобок -> оставить в строчку
         const isSingleSimple = parts.length === 1 && !/[{\[]/.test(parts[0]) && !parts[0].includes('\n');
 
         if (isSingleSimple) {
@@ -120,31 +109,27 @@
           out += open + '\n';
           for (let k = 0; k < parts.length; k++) {
             const p = parts[k];
-            // добавляем отступ + рекурсивное форматирование части
             out += spaces + '  ' + formatNestedObject(p, indent + 1);
             if (k < parts.length - 1) out += ',\n';
             else out += '\n';
           }
           out += spaces + close;
         }
-
         i = j;
       } else {
         out += ch;
         i++;
       }
     }
-
     return out;
   }
 
-  // --- Форматирование XML (без отрицательного indent) ---
   function formatXML(xml) {
     if(!xml) return xml;
     let formatted = '';
     let indent = 0;
     const reg = /(>)(<)(\/*)/g;
-    xml = xml.replace(reg, '$1\n$2$3'); // вставляем переносы между тегами
+    xml = xml.replace(reg, '$1\n$2$3');
     const lines = xml.split('\n');
     lines.forEach(line => {
       if(line.match(/^<\/\w/)) indent--;
@@ -155,7 +140,6 @@
     return formatted.trim();
   }
 
-  // --- Основная логика ---
   try{
     const sel = window.getSelection();
     if(!sel || sel.rangeCount===0 || !sel.toString().trim()){ showError("Логи не выделены"); return; }
@@ -178,22 +162,9 @@
             const td = cells[idx];
             if(td && td.textContent.trim() && !noiseRe.test(td.textContent.trim()) && sel.containsNode(td,true)) {
               let val = td.textContent.trim();
-
-              // форматирование exception: только первая строка
-              if(key === 'message.exception'){
-                val = val.split('\n')[0];
-              }
-
-              // сначала форматируем вложенные {…} или […] — парсером
-              if(/[{\[]/.test(val)) {
-                val = formatNestedObject(val, 0);
-              }
-
-              // затем форматируем XML, если есть
-              if(/<[^>]+>/.test(val)) {
-                val = formatXML(val);
-              }
-
+              if(key === 'message.exception'){ val = val.split('\n')[0]; }
+              if(/[{\[]/.test(val)) { val = formatNestedObject(val, 0); }
+              if(/<[^>]+>/.test(val)) { val = formatXML(val); }
               return val;
             }
           }
@@ -205,7 +176,7 @@
         const exception = getCellText('message.exception');
         const payload = getCellText('payload');
 
-        const block = [time, message, exception, payload].filter(Boolean).join(' | ');
+        const block = [time, message, exception, payload].filter(Boolean).join('  ');
         if(block) out.push(block);
       }
     });
