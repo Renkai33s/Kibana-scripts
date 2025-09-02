@@ -34,57 +34,37 @@
   function showError(msg){ showMessage(msg,true,false); }
   function showSuccess(msg){ showMessage(msg,false,true); }
 
-  // --- Pretty print XML ---
-  function prettyPrintXML(xmlStr){
-    try {
-      const parser = new DOMParser();
-      const xmlDoc = parser.parseFromString(xmlStr, "application/xml");
-      const serializer = new XMLSerializer();
-      const xml = serializer.serializeToString(xmlDoc);
-
-      let formatted = '';
-      const reg = /(>)(<)(\/*)/g;
-      xml.replace(reg, '$1\r\n$2$3').split('\r\n').forEach((line)=>{
-        let indent = 0;
-        if(line.match(/<\/\w/)) indent -= 1;
-        formatted += '  '.repeat(Math.max(indent,0)) + line + '\r\n';
-        if(line.match(/<\w[^>]*[^\/]>.*$/)) indent += 1;
-      });
-      return formatted.trim();
-    } catch {
-      return xmlStr; // если не XML
-    }
-  }
-
-  // --- Pretty print in-place ---
-  function prettyPrintInPlace(str){
+  // --- Pretty Print функции ---
+  function tryPrettyPrint(str){
     if(!str) return str;
 
-    // JSON: body={"…"}
-    str = str.replace(/body=({[\s\S]*?})/g, (match, p1)=>{
-      try { return 'body=' + JSON.stringify(JSON.parse(p1), null, 2); }
-      catch { return match; }
-    });
+    str = str.trim();
 
-    // URL-encoded: body=param1=…&param2=…
-    str = str.replace(/body=([^\s]+)/g, (match, p1)=>{
-      if(p1.includes('=') && p1.includes('&')){
-        try {
-          const params = new URLSearchParams(p1);
-          const formatted = [...params].map(([k,v])=>`${k}: ${v}`).join('\n');
-          return 'body=' + formatted;
-        } catch { return match; }
-      }
-      return match;
-    });
+    // 1. JSON
+    try {
+      const obj = JSON.parse(str);
+      return JSON.stringify(obj, null, 2);
+    } catch(e){}
 
-    // SOAP/XML messages
-    str = str.replace(/(SOAP-(?:OUT|IN) message:\s*)(<.+>)/gs, (match, prefix, xml)=>{
-      const pretty = prettyPrintXML(xml);
-      return prefix + pretty;
-    });
+    // 2. URL-encoded
+    try {
+      const decoded = decodeURIComponent(str);
+      if(decoded !== str) return decoded;
+    } catch(e){}
 
-    return str;
+    // 3. XML (простейшее форматирование)
+    if(str.startsWith('<') && str.endsWith('>')){
+      try {
+        const parser = new DOMParser();
+        const xmlDoc = parser.parseFromString(str, 'application/xml');
+        const serializer = new XMLSerializer();
+        const xmlStr = serializer.serializeToString(xmlDoc);
+        // простой pretty print с отступами
+        return xmlStr.replace(/(>)(<)(\/*)/g, '$1\n$2$3');
+      } catch(e){}
+    }
+
+    return str; // если ни одно не сработало
   }
 
   // --- Основная логика ---
@@ -92,6 +72,7 @@
     const sel = window.getSelection();
     if(!sel || sel.rangeCount===0 || !sel.toString().trim()){ showError("Логи не выделены"); return; }
 
+    const noiseRe = /^(INFO|DEBUG|WARN|WARNING|ERROR|TRACE|-|–|—)$/i;
     const trs = Array.from(document.querySelectorAll('tr'));
     const out = [];
 
@@ -107,21 +88,19 @@
           const idx = ths.findIndex(th=>th.textContent.trim().toLowerCase()===key);
           if(idx>=0){
             const td = cells[idx];
-            if(td && td.textContent.trim() && sel.containsNode(td,true))
+            if(td && td.textContent.trim() && !noiseRe.test(td.textContent.trim()) && sel.containsNode(td,true))
               return td.textContent.trim();
           }
           return null;
         }
 
         const time = getCellText('time');
-        let message = getCellText('message.message');
-        let exception = getCellText('message.exception');
-        if(exception) exception = exception.split('\n')[0];
-        let payload = getCellText('payload');
+        const message = tryPrettyPrint(getCellText('message.message'));
+        let exception = tryPrettyPrint(getCellText('message.exception'));
+        if(exception) exception = exception.split('\n')[0]; // только первая строка
+        const payload = tryPrettyPrint(getCellText('payload'));
 
-        message = prettyPrintInPlace(message);
-        payload = prettyPrintInPlace(payload);
-
+        // Формат с разделителем "|": time | message | exception | payload
         const line = [time, message, exception, payload].filter(Boolean).join(' | ');
         if(line) out.push(line);
       }
@@ -137,5 +116,4 @@
     console.error(e);
     showError("Что-то пошло не так");
   }
-
 })();
