@@ -108,7 +108,32 @@
     return [...new Set(traces)];
   }
 
-  function insertAndRun(traces, tLimit = false) {
+  // --- НОВОЕ: определение выделенного трейса ---
+  function getSelectedTraceFromTable(traceIdx) {
+    try {
+      const table = x(tableXPath);
+      if (!table) return null;
+
+      // Пытаемся найти "реально" выделенную строку разными способами
+      const selRow =
+        table.querySelector('tbody tr[aria-selected="true"]') ||
+        table.querySelector("tbody tr.euiTableRow-isSelected") ||
+        table.querySelector("tbody tr.selected");
+
+      if (!selRow) return null;
+
+      const cell = selRow.children[traceIdx];
+      const val = cell && cell.innerText ? cell.innerText.trim() : "";
+      if (val && val !== "-") return val;
+
+      return null;
+    } catch (e) {
+      return null;
+    }
+  }
+
+  // Переиспользуемая вставка с возможностью кастомного уведомления
+  function insertAndRun(traces, tLimit = false, overrideMsg = null) {
     if (traces.length === 0) {
       showError("Трейсы не найдены");
       return;
@@ -127,7 +152,9 @@
     const btn = x(buttonXPath);
     if (btn) btn.click();
 
-    if (tLimit) {
+    if (overrideMsg) {
+      showMessage(overrideMsg, false, true);
+    } else if (tLimit) {
       showLimit("Достигнут лимит в 20 трейсов");
     } else {
       showSuccess("Трейсы подставлены");
@@ -155,6 +182,13 @@
   if (traceIdx === -1) {
     showError("Трейсы не найдены");
     return;
+  }
+
+  // --- НОВОЕ: короткое замыкание, если уже есть выделенный трейс ---
+  const preselectedTrace = getSelectedTraceFromTable(traceIdx);
+  if (preselectedTrace) {
+    insertAndRun([preselectedTrace], false, "Подставлен только выделенный трейс");
+    return; // Ничего больше не ищем
   }
 
   // --- Прогресс бар ---
@@ -264,7 +298,7 @@
     }
   }
 
-  // --- Основной алгоритм ---
+  // --- Основной алгоритм (если выделенного нет) ---
   const tracesBtn = x(tracesBtnXPath);
 
   if (cnt <= 50) {
