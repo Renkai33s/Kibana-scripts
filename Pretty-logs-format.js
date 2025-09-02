@@ -2,7 +2,6 @@
   const wanted = ["time","message.message","message.exception","payload"];
   const norm = s => s?.trim().replace(/\s+/g," ").toLowerCase();
 
-  // Пустые токены одинаково для всех колонок
   const isEmptyToken = v => {
     const t = (v ?? "").toString().trim().toLowerCase();
     return !t || t === "-" || t === "—" || t === "–" || t === "n/a" || t === "null";
@@ -10,31 +9,19 @@
 
   // ---------- JSON prettify ----------
   const tryParseJson = s => { try { return JSON.parse(s); } catch { return null; } };
-
-  // 1) если вся ячейка — JSON
   const prettyWholeJson = text => {
     const obj = tryParseJson(text.trim());
     return obj != null ? JSON.stringify(obj, null, 2) : null;
   };
 
-  // 2) формат всех сбалансированных {...} / [...] фрагментов внутри текста
+  // формат любых сбалансированных JSON-фрагментов {...}/[...]
   const prettyAnyJsonFragments = (text) => {
-    let s = text;
-    let out = "";
-    let i = 0;
-    let changed = false;
-
+    let s = text, out = "", i = 0, changed = false;
     while (i < s.length) {
       const ch = s[i];
-      if (ch !== "{" && ch !== "[") {
-        out += ch;
-        i++;
-        continue;
-      }
-      const open = ch;
-      const close = open === "{" ? "}" : "]";
+      if (ch !== "{" && ch !== "[") { out += ch; i++; continue; }
+      const open = ch, close = open === "{" ? "}" : "]";
       let depth = 0, j = i, inStr = false, esc = false;
-
       for (; j < s.length; j++) {
         const c = s[j];
         if (inStr) {
@@ -47,32 +34,22 @@
           else if (c === close) { depth--; if (depth === 0) break; }
         }
       }
-
-      if (depth !== 0) { // несбалансировано — просто символ
-        out += s[i++];
-        continue;
-      }
+      if (depth !== 0) { out += s[i++]; continue; }
 
       const candidate = s.slice(i, j + 1);
-
-      // Пропускаем «простые» массивы без объектов/массивов внутри (например, [1755])
-      if (open === "[" && !/[{\[]/.test(candidate)) {
-        out += candidate;
-        i = j + 1;
-        continue;
+      if (open === "[" && !/[{\[]/.test(candidate)) { // простые массивы типа [1755] — не форматируем
+        out += candidate; i = j + 1; continue;
       }
-
       const obj = tryParseJson(candidate);
       if (obj != null) {
         const pretty = JSON.stringify(obj, null, 2);
-        out += "\n" + pretty;            // перенос перед форматированным блоком
+        out += "\n" + pretty;
         changed = true;
       } else {
-        out += candidate;                 // не JSON — оставляем как есть
+        out += candidate;
       }
       i = j + 1;
     }
-
     return changed ? out : null;
   };
 
@@ -81,7 +58,7 @@
     try {
       const doc = new DOMParser().parseFromString(xmlStr, "text/xml");
       if (doc.getElementsByTagName("parsererror")[0]) return null;
-      return new XMLSerializer().serializeToString(doc); // нормализуем
+      return new XMLSerializer().serializeToString(doc);
     } catch { return null; }
   };
 
@@ -105,45 +82,41 @@
     return out.join('\n');
   };
 
-  // Форматирует первый/крупнейший XML-фрагмент в тексте
   const prettyXmlInText = (text) => {
     const firstLt = text.indexOf('<');
     if (firstLt === -1) return null;
     const lastGt = text.lastIndexOf('>');
     if (lastGt <= firstLt) return null;
-
     const candidate = text.slice(firstLt, lastGt + 1);
     const normalized = parseXml(candidate);
     if (!normalized) return null;
-
     const pretty = indentXml(normalized);
     const before = text.slice(0, firstLt).replace(/\s+$/,'');
     const after  = text.slice(lastGt + 1).replace(/^\s+/,'');
     return (before ? before + "\n" : "") + pretty + (after ? "\n" + after : "");
   };
 
-  // Универсальный форматтер для любой ячейки: JSON (целый → фрагменты) потом XML
+  // Универсальный форматтер для любой ячейки
   const prettyValue = (raw) => {
     let v = (raw ?? "").toString();
-    if (isEmptyToken(v)) return "";       // « - » и аналоги → затираем
+    if (isEmptyToken(v)) return "";  // «-» и аналоги — затираем
 
-    // 1) целиком JSON
+    // JSON целиком
     const wj = prettyWholeJson(v);
     if (wj !== null) return wj.trim();
 
-    // 2) любые JSON-фрагменты
+    // любые JSON-фрагменты
     const jf = prettyAnyJsonFragments(v);
     if (jf !== null) return jf.trim();
 
-    // 3) целиком XML
+    // XML целиком
     const wx = parseXml(v.trim());
     if (wx) return indentXml(wx).trim();
 
-    // 4) XML-фрагмент в тексте (например SOAP внутри лога)
+    // XML-фрагмент в тексте
     const fx = prettyXmlInText(v);
     if (fx !== null) return fx.trim();
 
-    // Не распознали — возвращаем подрезав края (не трогая внутренние \n)
     return v.trim();
   };
 
@@ -162,10 +135,10 @@
     const ths = tableEl.querySelectorAll("thead th, tr th");
     if (!ths.length) return false;
     headers = Array.from(ths).map(th => norm(th.textContent));
-    wanted.forEach(w => {
+    for (const w of wanted) {
       const i = headers.findIndex(h => h === norm(w));
       if (i !== -1) idxMap.set(norm(w), i);
-    });
+    }
     return idxMap.size > 0;
   };
 
@@ -178,12 +151,11 @@
         const raw = (i != null && tds[i]) ? tds[i].innerText : "";
         return prettyValue(raw);
       });
-      // выбрасываем пустые поля целиком
-      return vals.filter(v => v !== "");
+      return vals.filter(v => v !== ""); // выбрасываем пустые поля
     });
   };
 
-  // 1) обычная <table>
+  // 1) обычная таблица
   let table = selectedTr[0]?.closest?.("table");
   if (table && buildIdxMapFromTable(table)) rows = extractFromTable(table, selectedTr);
 
@@ -196,10 +168,10 @@
       const headersEls = grid.querySelectorAll('[role="columnheader"]');
       if (headersEls.length) {
         headers = Array.from(headersEls).map(el => norm(el.textContent));
-        wanted.forEach(w => {
+        for (const w of wanted) {
           const i = headers.findIndex(h => h === norm(w));
           if (i !== -1) idxMap.set(norm(w), i);
-        });
+        }
         if (idxMap.size) {
           rows = selectedRoleRows.map(r => {
             const cells = Array.from(r.querySelectorAll('[role="gridcell"], [role="cell"]'));
@@ -227,13 +199,17 @@
     return;
   }
 
-  // Формируем строки: только непустые поля; внутри ячеек сохраняем многострочные JSON/XML
+  // ===== Разделители: один пробел между полями, одна пустая строка между строками =====
+  const COL_SEP = " ";
+  const ROW_SEP = "\n\n";
+
   const lines = rows
-    .map(r => r.join("\t").replace(/[ \t]+$/g, "")) // подрезаем хвостовые пробелы/табы
+    .map(r => r.join(COL_SEP).replace(/[ \t]+$/g, "")) // подрезаем хвостовые пробелы
     .filter(line => line.trim() !== "");
 
-  const tsv = lines.join("\n");
+  const tsv = lines.join(ROW_SEP);
 
+  // Копирование в буфер
   const copyTSV = async text => {
     try {
       if (navigator.clipboard && window.isSecureContext) { await navigator.clipboard.writeText(text); return true; }
