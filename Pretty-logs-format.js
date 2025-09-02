@@ -2,86 +2,66 @@
   const wanted = ["time","message.message","message.exception","payload"];
   const norm = s => s?.trim().replace(/\s+/g," ").toLowerCase();
 
-  // === JSON prettifier: ищет JSON-блоки в тексте и форматирует их ===
-  function prettyJsonBlocks(text) {
+  const isEmptyToken = v => {
+    const t = (v ?? "").trim().toLowerCase();
+    return !t || t === "-" || t === "—" || t === "–" || t === "n/a" || t === "null";
+  };
+
+  const tryParse = s => { try { return JSON.parse(s); } catch { return null; } };
+
+  // Форматирует JSON только у body=... (не трогаем [1755] и т.п.)
+  function prettyJsonAfterBody(text) {
     if (!text || typeof text !== "string") return text;
+    const m = text.match(/\bbody\s*[:=]\s*/i);
+    if (!m) return text;
 
-    const tryPretty = (jsonStr) => {
-      try {
-        const obj = JSON.parse(jsonStr);
-        return JSON.stringify(obj, null, 2); // красиво и с декодированными \uXXXX
-      } catch {
-        return null;
-      }
-    };
+    let i = m.index + m[0].length;
 
-    // Если вся строка — валидный JSON
-    const whole = tryPretty(text.trim());
-    if (whole !== null) return whole;
+    // найти первую { или [ после body
+    while (i < text.length && text[i] !== "{" && text[i] !== "[") i++;
+    if (i >= text.length) return text;
 
-    // Иначе ищем вложенные {...} / [...] (например после "body=")
-    let result = "";
-    let i = 0;
-    while (i < text.length) {
-      const ch = text[i];
-      if (ch !== "{" && ch !== "[") {
-        result += ch;
-        i++;
-        continue;
-      }
+    const open = text[i];
+    const close = open === "{" ? "}" : "]";
+    // если это массив — форматируем только если внутри есть объект/массив
+    let depth = 0, j = i, inStr = false, escaped = false;
 
-      // Пытаемся вырезать сбалансированный JSON-блок, учитывая строки/экранирование
-      const open = ch;
-      const close = (ch === "{") ? "}" : "]";
-      let depth = 0;
-      let j = i;
-      let inStr = false;
-      let strQuote = null;
-      let escaped = false;
-
-      for (; j < text.length; j++) {
-        const c = text[j];
-
-        if (inStr) {
-          if (escaped) {
-            escaped = false;
-          } else if (c === "\\") {
-            escaped = true;
-          } else if (c === strQuote) {
-            inStr = false;
-            strQuote = null;
-          }
-        } else {
-          if (c === '"' || c === "'") {
-            // JSON официально поддерживает только двойные кавычки, но некоторые логи кладут одинарные — попробуем аккуратно
-            inStr = true;
-            strQuote = c;
-          } else if (c === open) {
-            depth++;
-          } else if (c === close) {
-            depth--;
-            if (depth === 0) {
-              // Кандидат найден
-              const candidate = text.slice(i, j + 1);
-              const pretty = tryPretty(candidate);
-              if (pretty !== null) {
-                result += "\n" + pretty + "\n";
-                i = j + 1;
-                break;
-              }
-            }
-          }
+    for (; j < text.length; j++) {
+      const c = text[j];
+      if (inStr) {
+        if (escaped) { escaped = false; }
+        else if (c === "\\") { escaped = true; }
+        else if (c === '"') { inStr = false; }
+      } else {
+        if (c === '"') inStr = true;
+        else if (c === open) depth++;
+        else if (c === close) {
+          depth--;
+          if (depth === 0) break;
         }
       }
-
-      if (j >= text.length) {
-        // не получилось — просто добавить символ и идти дальше
-        result += text[i];
-        i++;
-      }
     }
+    if (depth !== 0) return text;
 
-    return result;
+    const candidate = text.slice(i, j + 1);
+
+    // если массив — форматируем только "богатые" (с объектами/массивами внутри)
+    if (open === "[" && !/[{\[]/.test(candidate)) return text;
+
+    const obj = tryParse(candidate);
+    if (obj == null) return text;
+
+    const pretty = JSON.stringify(obj, null, 2);
+    return text.slice(0, i) + "\n" + pretty + "\n" + text.slice(j + 1);
+  }
+
+  // Для колонки payload — пробуем весь текст как JSON; если не вышло, пытаемся как в body
+  function prettyPayload(text) {
+    if (!text || typeof text !== "string") return text;
+    const trimmed = text.trim();
+    const whole = tryParse(trimmed);
+    if (whole != null) return JSON.stringify(whole, null, 2);
+    return prettyJsonAfterBody(text);
   }
 
   const sel = window.getSelection();
@@ -90,7 +70,6 @@
     return;
   }
 
-  // Собираем выделенные TR для <table>
   const allTr = Array.from(document.querySelectorAll("tr"));
   const selectedTr = allTr.filter(tr => sel.containsNode(tr, true));
   let rows = [], headers = [], idxMap = new Map();
@@ -112,22 +91,35 @@
       const tds = Array.from(tr.querySelectorAll("td, th"));
       return wanted.map(w => {
         const i = idxMap.get(norm(w));
-        let val = (i != null && tds[i]) ? tds[i].innerText.trim() : "";
-        if (w === "message.exception") val = val.split(/\r?\n/)[0] || "";
-        // форматируем JSON (если валиден) в любом поле
-        val = prettyJsonBlocks(val);
-        return val;
+        let val = (i != null && tds[i]) ? tds[i].innerText : "";
+
+        // нормализация значений
+        if (w === "message.exception") {
+          if (isEmptyToken(val)) return "";
+          val = (val.split(/\r?\n/)[0] || "").trim();
+          return isEmptyToken(val) ? "" : val;
+        }
+
+        if (isEmptyToken(val)) return "";
+
+        if (w === "payload") {
+          val = prettyPayload(val);
+        } else if (w === "message.message") {
+          val = prettyJsonAfterBody(val);
+        }
+
+        return String(val).trim();
       });
     });
   };
 
-  // 1) как обычная таблица
+  // 1) обычная <table>
   let table = selectedTr[0]?.closest?.("table");
   if (table && buildIdxMapFromTable(table)) {
     rows = extractFromTable(table, selectedTr);
   }
 
-  // 2) ARIA grid (role="grid"/"table")
+  // 2) ARIA grid
   if (!rows.length) {
     const roleRowsAll = Array.from(document.querySelectorAll('[role="row"]'));
     const selectedRoleRows = roleRowsAll.filter(r => sel.containsNode(r, true));
@@ -145,10 +137,20 @@
             const cells = Array.from(r.querySelectorAll('[role="gridcell"], [role="cell"]'));
             return wanted.map(w => {
               const i = idxMap.get(norm(w));
-              let val = (i != null && cells[i]) ? cells[i].innerText.trim() : "";
-              if (w === "message.exception") val = val.split(/\r?\n/)[0] || "";
-              val = prettyJsonBlocks(val);
-              return val;
+              let val = (i != null && cells[i]) ? cells[i].innerText : "";
+
+              if (w === "message.exception") {
+                if (isEmptyToken(val)) return "";
+                val = (val.split(/\r?\n/)[0] || "").trim();
+                return isEmptyToken(val) ? "" : val;
+              }
+
+              if (isEmptyToken(val)) return "";
+
+              if (w === "payload") val = prettyPayload(val);
+              else if (w === "message.message") val = prettyJsonAfterBody(val);
+
+              return String(val).trim();
             });
           });
         }
@@ -156,7 +158,7 @@
     }
   }
 
-  // 3) fallback по ближайшей строке
+  // 3) fallback
   if (!rows.length) {
     const anchorTr = sel.anchorNode?.parentElement?.closest?.("tr");
     const fbTable = anchorTr?.closest?.("table");
@@ -166,42 +168,25 @@
   }
 
   if (!rows.length) {
-    alert("Не удалось найти данные. Убедись, что выделены строки таблицы с колонками time, message.message, message.exception, payload.");
+    alert("Не удалось найти данные. Убедись, что выделены строки и есть колонки time, message.message, message.exception, payload.");
     return;
   }
 
-  // ВАЖНО: больше не убираем переводы строк внутри ячеек — чтобы сохранить красивый JSON.
-  // Каждая строка — это набор полей, разделённых табами; в полях может быть многострочный текст.
+  // без заголовка; пустые значения — просто пусто; JSON может быть многострочным
   const lines = rows.map(r => r.map(v => (v ?? "").trim()).join("\t"));
   const tsv = lines.join("\n");
 
-  // Копируем как есть (многострочный JSON сохранится)
   const copyTSV = async text => {
     try {
-      if (navigator.clipboard && window.isSecureContext) {
-        await navigator.clipboard.writeText(text);
-        return true;
-      }
+      if (navigator.clipboard && window.isSecureContext) { await navigator.clipboard.writeText(text); return true; }
       const ta = document.createElement("textarea");
-      ta.value = text;
-      ta.style.position = "fixed";
-      ta.style.top = "-1000px";
-      document.body.appendChild(ta);
-      ta.focus();
-      ta.select();
-      const ok = document.execCommand("copy");
-      document.body.removeChild(ta);
-      return ok;
-    } catch {
-      return false;
-    }
+      ta.value = text; ta.style.position = "fixed"; ta.style.top = "-1000px";
+      document.body.appendChild(ta); ta.focus(); ta.select();
+      const ok = document.execCommand("copy"); document.body.removeChild(ta); return ok;
+    } catch { return false; }
   };
 
   const ok = await copyTSV(tsv);
-  if (ok) {
-    alert(`Скопировано ${rows.length} строк в буфер (с форматированием JSON).`);
-  } else {
-    console.log(tsv);
-    alert("Не получилось скопировать в буфер. Результат выведен в консоль.");
-  }
+  alert(ok ? `Скопировано ${rows.length} строк в буфер.` : "Не получилось скопировать в буфер. Результат выведен в консоль.");
+  if (!ok) console.log(tsv);
 })();
