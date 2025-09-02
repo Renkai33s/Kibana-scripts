@@ -34,7 +34,7 @@
   function showError(msg){ showMessage(msg,true,false); }
   function showSuccess(msg){ showMessage(msg,false,true); }
 
-  // --- Утилита: разделение верхнего уровня по запятым (учитывает кавычки и вложенности) ---
+  // --- Разделение верхнего уровня по запятым ---
   function splitTopLevel(str) {
     const parts = [];
     let curr = '';
@@ -56,7 +56,7 @@
     return parts.map(p => p.trim()).filter(p => !(p === '' && parts.length === 1 && str.trim() === ''));
   }
 
-  // --- Форматирование вложенных структур {…} и […] ---
+  // --- Форматирование вложенных структур {…}, […], key=[…] ---
   function formatNestedObject(str, indent = 0) {
     if (!str) return str;
     const spaces = '  '.repeat(indent);
@@ -101,7 +101,16 @@
           out += open + '\n';
           for (let k = 0; k < parts.length; k++) {
             const p = parts[k];
-            out += spaces + '  ' + formatNestedObject(p, indent + 1);
+            // Проверка на key=[value] и раскладка
+            const m = p.match(/^([^=]+)=\[(.*)\]$/);
+            if (m) {
+              const key = m[1];
+              const value = m[2];
+              const formattedValue = formatNestedObject('[' + value + ']', indent + 1);
+              out += spaces + '  ' + key + '=' + formattedValue;
+            } else {
+              out += spaces + '  ' + formatNestedObject(p, indent + 1);
+            }
             if (k < parts.length - 1) out += ',\n';
             else out += '\n';
           }
@@ -169,15 +178,16 @@
             if(td && td.textContent.trim() && !noiseRe.test(td.textContent.trim()) && sel.containsNode(td,true)) {
               let val = td.textContent.trim();
 
-              // exception: только первая строка
               if(key === 'message.exception'){ val = val.split('\n')[0]; }
 
-              // URL-encoded форматирование
+              // URL-encoded
               if(/^[^=]+=[^=]+/.test(val) && val.includes('&')) {
                 val = formatURLEncoded(val, 0);
               }
-              // вложенные {…} или […]
-              else if(/[{\[]/.test(val)) { val = formatNestedObject(val, 0); }
+              // вложенные объекты/массивы и key=[…]
+              else if(/[{\[]/.test(val)) {
+                val = formatNestedObject(val, 0);
+              }
               // XML
               if(/<[^>]+>/.test(val)) { val = formatXML(val); }
 
