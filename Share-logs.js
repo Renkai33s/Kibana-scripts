@@ -73,7 +73,7 @@ javascript:(function(){
 
         function clickCopyLink(){
             var copyBtn = document.querySelector('button[data-test-subj="copyShareUrlButton"]');
-            if(copyBtn){ copyBtn.click(); showSuccess("Ссылка скопирована!"); }
+            if(copyBtn){ copyBtn.click(); showSuccess("Ссылка скопирована"); }
             else showError("Кнопка Copy Link не найдена");
         }
 
