@@ -17,41 +17,64 @@
     return obj != null ? JSON.stringify(obj, null, 2) : null;
   };
 
-  // 2) если внутри текста есть body=JSON — форматируем только этот блок (избегая ложных срабатываний на [1755] и т.п.)
-  function prettyJsonAfterBody(text) {
-    const m = text.match(/\bbody\s*[:=]\s*/i);
-    if (!m) return null;
-    let i = m.index + m[0].length;
-    while (i < text.length && text[i] !== "{" && text[i] !== "[") i++;
-    if (i >= text.length) return null;
+  // 2) формат всех сбалансированных {...} / [...] фрагментов внутри текста
+  const prettyAnyJsonFragments = (text) => {
+    let s = text;
+    let out = "";
+    let i = 0;
+    let changed = false;
 
-    const open = text[i], close = open === "{" ? "}" : "]";
-    let depth = 0, j = i, inStr = false, esc = false;
-    for (; j < text.length; j++) {
-      const c = text[j];
-      if (inStr) {
-        if (esc) esc = false;
-        else if (c === "\\") esc = true;
-        else if (c === '"') inStr = false;
-      } else {
-        if (c === '"') inStr = true;
-        else if (c === open) depth++;
-        else if (c === close) { depth--; if (depth === 0) break; }
+    while (i < s.length) {
+      const ch = s[i];
+      if (ch !== "{" && ch !== "[") {
+        out += ch;
+        i++;
+        continue;
       }
+      const open = ch;
+      const close = open === "{" ? "}" : "]";
+      let depth = 0, j = i, inStr = false, esc = false;
+
+      for (; j < s.length; j++) {
+        const c = s[j];
+        if (inStr) {
+          if (esc) esc = false;
+          else if (c === "\\") esc = true;
+          else if (c === '"') inStr = false;
+        } else {
+          if (c === '"') inStr = true;
+          else if (c === open) depth++;
+          else if (c === close) { depth--; if (depth === 0) break; }
+        }
+      }
+
+      if (depth !== 0) { // несбалансировано — просто символ
+        out += s[i++];
+        continue;
+      }
+
+      const candidate = s.slice(i, j + 1);
+
+      // Пропускаем «простые» массивы без объектов/массивов внутри (например, [1755])
+      if (open === "[" && !/[{\[]/.test(candidate)) {
+        out += candidate;
+        i = j + 1;
+        continue;
+      }
+
+      const obj = tryParseJson(candidate);
+      if (obj != null) {
+        const pretty = JSON.stringify(obj, null, 2);
+        out += "\n" + pretty;            // перенос перед форматированным блоком
+        changed = true;
+      } else {
+        out += candidate;                 // не JSON — оставляем как есть
+      }
+      i = j + 1;
     }
-    if (depth !== 0) return null;
 
-    const candidate = text.slice(i, j + 1);
-    // Простые массивы (типа [1755]) не считаем «богатыми» и не форматируем
-    if (open === "[" && !/[{\[]/.test(candidate)) return null;
-
-    const obj = tryParseJson(candidate);
-    if (obj == null) return null;
-
-    const pretty = JSON.stringify(obj, null, 2);
-    // Вставляем без лишнего завершающего \n
-    return text.slice(0, i) + "\n" + pretty + text.slice(j + 1);
-  }
+    return changed ? out : null;
+  };
 
   // ---------- XML prettify ----------
   const parseXml = (xmlStr) => {
@@ -82,7 +105,7 @@
     return out.join('\n');
   };
 
-  // Вставляет красиво отформатированный XML-фрагмент вместо «комка» внутри текста
+  // Форматирует первый/крупнейший XML-фрагмент в тексте
   const prettyXmlInText = (text) => {
     const firstLt = text.indexOf('<');
     if (firstLt === -1) return null;
@@ -99,20 +122,28 @@
     return (before ? before + "\n" : "") + pretty + (after ? "\n" + after : "");
   };
 
-  // Универсальный форматтер для любой ячейки: JSON (целый или body=...), потом XML
+  // Универсальный форматтер для любой ячейки: JSON (целый → фрагменты) потом XML
   const prettyValue = (raw) => {
     let v = (raw ?? "").toString();
-    if (isEmptyToken(v)) return "";          // « - » и аналоги → затираем
-    // Порядок: целиком JSON → body=JSON → XML (целиком/фрагмент)
+    if (isEmptyToken(v)) return "";       // « - » и аналоги → затираем
+
+    // 1) целиком JSON
     const wj = prettyWholeJson(v);
     if (wj !== null) return wj.trim();
-    const bj = prettyJsonAfterBody(v);
-    if (bj !== null) return bj.trim();
+
+    // 2) любые JSON-фрагменты
+    const jf = prettyAnyJsonFragments(v);
+    if (jf !== null) return jf.trim();
+
+    // 3) целиком XML
     const wx = parseXml(v.trim());
     if (wx) return indentXml(wx).trim();
+
+    // 4) XML-фрагмент в тексте (например SOAP внутри лога)
     const fx = prettyXmlInText(v);
     if (fx !== null) return fx.trim();
-    // Не распознали — возвращаем как есть, подрезав края (без порчи внутренних переводов)
+
+    // Не распознали — возвращаем подрезав края (не трогая внутренние \n)
     return v.trim();
   };
 
@@ -198,8 +229,9 @@
 
   // Формируем строки: только непустые поля; внутри ячеек сохраняем многострочные JSON/XML
   const lines = rows
-    .map(r => r.join("\t").replace(/[ \t]+$/g, "")) // обрезаем хвостовые пробелы/табы, но не трогаем внутренние переводы строк
+    .map(r => r.join("\t").replace(/[ \t]+$/g, "")) // подрезаем хвостовые пробелы/табы
     .filter(line => line.trim() !== "");
+
   const tsv = lines.join("\n");
 
   const copyTSV = async text => {
