@@ -34,17 +34,15 @@
   function showError(msg){ showMessage(msg,true,false); }
   function showSuccess(msg){ showMessage(msg,false,true); }
 
-  // --- Helper: Pretty Print for body content ---
+  // --- Pretty print тела ---
   function prettyPrintBody(body){
     if(!body) return body;
-
     body = body.trim();
 
     // JSON
     if(body.startsWith('{') || body.startsWith('[')){
       try {
-        const obj = JSON.parse(body);
-        return JSON.stringify(obj, null, 2);
+        return JSON.stringify(JSON.parse(body), null, 2);
       } catch {}
     }
 
@@ -52,9 +50,7 @@
     if(body.includes('=') && body.includes('&')){
       try {
         const params = new URLSearchParams(body);
-        if([...params].length > 0){
-          return [...params].map(([k,v]) => `${k}: ${v}`).join('\n');
-        }
+        return [...params].map(([k,v])=>`${k}: ${v}`).join('\n');
       } catch {}
     }
 
@@ -68,7 +64,6 @@
       } catch {}
     }
 
-    // Если ничего не подошло
     return body;
   }
 
@@ -77,7 +72,6 @@
     const sel = window.getSelection();
     if(!sel || sel.rangeCount===0 || !sel.toString().trim()){ showError("Логи не выделены"); return; }
 
-    const noiseRe = /^(INFO|DEBUG|WARN|WARNING|ERROR|TRACE|-|–|—)$/i;
     const trs = Array.from(document.querySelectorAll('tr'));
     const out = [];
 
@@ -93,24 +87,31 @@
           const idx = ths.findIndex(th=>th.textContent.trim().toLowerCase()===key);
           if(idx>=0){
             const td = cells[idx];
-            if(td && td.textContent.trim() && !noiseRe.test(td.textContent.trim()) && sel.containsNode(td,true))
+            if(td && td.textContent.trim() && sel.containsNode(td,true))
               return td.textContent.trim();
           }
           return null;
         }
 
         const time = getCellText('time');
-        const message = getCellText('message.message');
+        let message = getCellText('message.message');
         let exception = getCellText('message.exception');
         if(exception) exception = exception.split('\n')[0];
         let payload = getCellText('payload');
 
-        // Pretty print только для body/payload
-        const ppMessage = message ? prettyPrintBody(message) : null;
-        const ppPayload = payload ? prettyPrintBody(payload) : null;
+        // Извлечение body внутри строки
+        const bodyMatch = (txt)=>{
+          if(!txt) return null;
+          let m = txt.match(/body=(.+)$/s);
+          if(m) return m[1];
+          m = txt.match(/SOAP-(?:OUT|IN) message:\s*(<.+>)/s);
+          return m ? m[1] : null;
+        };
 
-        // Формат с разделителем "|"
-        const line = [time, ppMessage, exception, ppPayload].filter(Boolean).join(' | ');
+        message = prettyPrintBody(bodyMatch(message) || message);
+        payload = prettyPrintBody(bodyMatch(payload) || payload);
+
+        const line = [time, message, exception, payload].filter(Boolean).join(' | ');
         if(line) out.push(line);
       }
     });
