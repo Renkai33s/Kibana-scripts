@@ -34,36 +34,42 @@
   function showError(msg){ showMessage(msg,true,false); }
   function showSuccess(msg){ showMessage(msg,false,true); }
 
-  // --- Helper: Pretty Print ---
-  function prettyPrint(value){
-    if(!value) return value;
+  // --- Helper: Pretty Print for body content ---
+  function prettyPrintBody(body){
+    if(!body) return body;
 
-    // Попробуем JSON
-    try {
-      const obj = JSON.parse(value);
-      return JSON.stringify(obj, null, 2);
-    } catch {}
+    body = body.trim();
 
-    // Попробуем URL-encoded
-    try {
-      const params = new URLSearchParams(value);
-      if([...params].length > 0){
-        return [...params].map(([k,v]) => `${k}: ${v}`).join('\n');
-      }
-    } catch {}
+    // JSON
+    if(body.startsWith('{') || body.startsWith('[')){
+      try {
+        const obj = JSON.parse(body);
+        return JSON.stringify(obj, null, 2);
+      } catch {}
+    }
 
-    // Попробуем XML
-    if(value.trim().startsWith('<') && value.trim().endsWith('>')){
+    // URL-encoded
+    if(body.includes('=') && body.includes('&')){
+      try {
+        const params = new URLSearchParams(body);
+        if([...params].length > 0){
+          return [...params].map(([k,v]) => `${k}: ${v}`).join('\n');
+        }
+      } catch {}
+    }
+
+    // XML
+    if(body.startsWith('<')){
       try {
         const parser = new DOMParser();
-        const xmlDoc = parser.parseFromString(value, "application/xml");
+        const xmlDoc = parser.parseFromString(body, "application/xml");
         const serializer = new XMLSerializer();
         return serializer.serializeToString(xmlDoc);
       } catch {}
     }
 
-    // Если ничего не подошло, просто вернём как есть
-    return value;
+    // Если ничего не подошло
+    return body;
   }
 
   // --- Основная логика ---
@@ -99,9 +105,9 @@
         if(exception) exception = exception.split('\n')[0];
         let payload = getCellText('payload');
 
-        // Pretty print для message и payload
-        const ppMessage = message ? prettyPrint(message) : null;
-        const ppPayload = payload ? prettyPrint(payload) : null;
+        // Pretty print только для body/payload
+        const ppMessage = message ? prettyPrintBody(message) : null;
+        const ppPayload = payload ? prettyPrintBody(payload) : null;
 
         // Формат с разделителем "|"
         const line = [time, ppMessage, exception, ppPayload].filter(Boolean).join(' | ');
