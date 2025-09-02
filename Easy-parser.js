@@ -34,17 +34,21 @@
   function showError(msg){ showMessage(msg,true,false); }
   function showSuccess(msg){ showMessage(msg,false,true); }
 
-  // --- Форматирование JSON / {...} / [...] рекурсивно ---
+  // --- Рекурсивное форматирование JSON-объекта ---
   function formatJSON(obj, indent=0){
     const spaces='  '.repeat(indent);
     if(obj===null || typeof obj!=='object') return JSON.stringify(obj);
 
     if(Array.isArray(obj)){
-      if(obj.length===1 && typeof obj[0]!=='object') return `[${formatJSON(obj[0])}]`;
+      if(obj.length===0) return '[]';
+      const allSimple=obj.every(x=>x===null||typeof x!=='object');
+      if(obj.length===1 && allSimple) return `[${formatJSON(obj[0])}]`;
       return '[\n'+obj.map(x=>spaces+'  '+formatJSON(x,indent+1)).join(',\n')+'\n'+spaces+']';
     } else {
       const keys=Object.keys(obj);
-      if(keys.length===1 && typeof obj[keys[0]]!=='object') return `{${keys[0]}:${formatJSON(obj[keys[0]])}}`;
+      if(keys.length===0) return '{}';
+      const allSimple=keys.every(k=>obj[k]===null||typeof obj[k]!=='object');
+      if(keys.length===1 && allSimple) return `{${keys[0]}:${formatJSON(obj[keys[0]])}}`;
       return '{\n'+keys.map(k=>spaces+'  '+k+': '+formatJSON(obj[k],indent+1)).join(',\n')+'\n'+spaces+'}';
     }
   }
@@ -79,7 +83,7 @@
     return text;
   }
 
-  // --- Форматирование XML с учётом одиночных тегов ---
+  // --- Форматирование XML ---
   function formatXML(xml){
     try{
       const reg=/(>)(<)(\/*)/g;
@@ -90,7 +94,7 @@
           line=line.trim();
           if(!line) return '';
           let indent=0;
-          if(/^<\w[^>]*>.*<\/\w/.test(line)) indent=0; // одиночный тег
+          if(/^<\w[^>]*>.*<\/\w/.test(line)) indent=0; // одиночный тег с текстом
           else if(/^<\/\w/.test(line)){ pad--; indent=0; }
           else if(/^<\w[^>]*[^\/]>/.test(line)) indent=1;
           const res="  ".repeat(Math.max(pad,0))+line;
