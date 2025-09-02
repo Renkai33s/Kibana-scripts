@@ -34,49 +34,117 @@
   function showError(msg){ showMessage(msg,true,false); }
   function showSuccess(msg){ showMessage(msg,false,true); }
 
-  // --- Форматирование вложенных структур {…} и […] ---
-  function formatNestedObject(str, indent = 0) {
-    if(!str) return str;
-    const spaces = '  '.repeat(indent);
-
-    return str.replace(/([{\[])([\s\S]*?)([}\]])/g, (match, open, inner, close) => {
-      let depth = 0;
-      const parts = [];
-      let current = '';
-      for (let i = 0; i < inner.length; i++) {
-        const ch = inner[i];
+  // --- Утилита: разделение верхнего уровня по запятым (учитывает кавычки и вложенности) ---
+  function splitTopLevel(str) {
+    const parts = [];
+    let curr = '';
+    let depth = 0;
+    let inString = false;
+    let prev = '';
+    for (let i = 0; i < str.length; i++) {
+      const ch = str[i];
+      if (ch === '"' && prev !== '\\') {
+        inString = !inString;
+        curr += ch;
+        prev = ch;
+        continue;
+      }
+      if (!inString) {
         if (ch === '{' || ch === '[') depth++;
-        if (ch === '}' || ch === ']') depth--;
+        else if (ch === '}' || ch === ']') depth--;
         if (ch === ',' && depth === 0) {
-          parts.push(current.trim());
-          current = '';
-        } else {
-          current += ch;
+          parts.push(curr);
+          curr = '';
+          prev = ch;
+          continue;
         }
       }
-      if (current.trim()) parts.push(current.trim());
-
-      const isSingle = parts.length === 1 && !/[{\[]/.test(parts[0]);
-
-      if (isSingle) {
-        return open + parts[0].trim() + close;
-      }
-
-      const formattedInner = parts.map(p => {
-        return spaces + '  ' + formatNestedObject(p, indent + 1);
-      }).join(',\n');
-
-      return open + '\n' + formattedInner + '\n' + spaces + close;
-    });
+      curr += ch;
+      prev = ch;
+    }
+    if (curr.length > 0) parts.push(curr);
+    // trim each part
+    return parts.map(p => p.trim()).filter(p => !(p === '' && parts.length === 1 && str.trim() === ''));
   }
 
-  // --- Форматирование XML ---
+  // --- Форматирование вложенных структур {…} и […] (парсерный вариант) ---
+  function formatNestedObject(str, indent = 0) {
+    if (!str) return str;
+    const spaces = '  '.repeat(indent);
+    let out = '';
+    let i = 0;
+
+    while (i < str.length) {
+      const ch = str[i];
+
+      if (ch === '{' || ch === '[') {
+        const open = ch;
+        const close = (ch === '{') ? '}' : ']';
+        // найти соответствующую закрывающую скобку, учитывая строки в кавычках
+        let j = i + 1;
+        let depth = 1;
+        let inString = false;
+        let prev = '';
+        while (j < str.length && depth > 0) {
+          const c = str[j];
+          if (c === '"' && prev !== '\\') inString = !inString;
+          if (!inString) {
+            if (c === open) depth++;
+            else if (c === close) depth--;
+          }
+          prev = c;
+          j++;
+        }
+        // если не нашли закрывающую, просто добавим оставшуюся часть и выйдем
+        if (depth !== 0) {
+          out += str.slice(i);
+          break;
+        }
+
+        const inner = str.slice(i + 1, j - 1);
+        // пустой блок -> "[]" или "{}"
+        if (inner.trim() === '') {
+          out += open + close;
+          i = j;
+          continue;
+        }
+
+        const parts = splitTopLevel(inner);
+
+        // если ровно один топ-уровневый элемент и он не содержит вложенных скобок -> оставить в строчку
+        const isSingleSimple = parts.length === 1 && !/[{\[]/.test(parts[0]) && !parts[0].includes('\n');
+
+        if (isSingleSimple) {
+          out += open + parts[0].trim() + close;
+        } else {
+          out += open + '\n';
+          for (let k = 0; k < parts.length; k++) {
+            const p = parts[k];
+            // добавляем отступ + рекурсивное форматирование части
+            out += spaces + '  ' + formatNestedObject(p, indent + 1);
+            if (k < parts.length - 1) out += ',\n';
+            else out += '\n';
+          }
+          out += spaces + close;
+        }
+
+        i = j;
+      } else {
+        out += ch;
+        i++;
+      }
+    }
+
+    return out;
+  }
+
+  // --- Форматирование XML (без отрицательного indent) ---
   function formatXML(xml) {
     if(!xml) return xml;
     let formatted = '';
     let indent = 0;
     const reg = /(>)(<)(\/*)/g;
-    xml = xml.replace(reg, '$1\n$2$3');
+    xml = xml.replace(reg, '$1\n$2$3'); // вставляем переносы между тегами
     const lines = xml.split('\n');
     lines.forEach(line => {
       if(line.match(/^<\/\w/)) indent--;
@@ -116,12 +184,12 @@
                 val = val.split('\n')[0];
               }
 
-              // форматирование вложенных {…} или […]
+              // сначала форматируем вложенные {…} или […] — парсером
               if(/[{\[]/.test(val)) {
                 val = formatNestedObject(val, 0);
               }
 
-              // форматирование XML
+              // затем форматируем XML, если есть
               if(/<[^>]+>/.test(val)) {
                 val = formatXML(val);
               }
