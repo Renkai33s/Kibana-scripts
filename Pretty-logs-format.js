@@ -13,42 +13,55 @@
      .replace(/\s{3,}/g, " ")
      .trim();
 
-  // ===== Pretty helpers =====
   const prettyJSON = (obj) => JSON.stringify(obj, null, 2);
 
-  // пытаемся распарсить JSON, если он целиком строка
-  const tryWholeJSON = (t) => {
-    const s = t.trim();
-    if (!((s.startsWith("{") && s.endsWith("}")) || (s.startsWith("[") && s.endsWith("]")))) return null;
-    try { return prettyJSON(JSON.parse(s)); } catch { return null; }
-  };
-
-  // ищем JSON-фрагмент внутри текста (жадно от первой "{" / "[" к ближайшему валидному завершению)
-  const tryInlineJSON = (t) => {
-    const text = t;
-    const scan = (open, close) => {
-      const start = text.indexOf(open);
-      if (start === -1) return null;
-      for (let end = text.lastIndexOf(close); end > start; end = text.lastIndexOf(close, end - 1)) {
-        const frag = text.slice(start, end + 1);
-        try {
-          const obj = JSON.parse(frag);
-          const pretty = prettyJSON(obj);
-          return text.slice(0, start) + pretty + text.slice(end + 1);
-        } catch {/* keep searching */}
+  // Сканер сбалансированных диапазонов для {…} и […], возвращает массив [start,end] включая скобки
+  const findBalancedRanges = (text, openCh, closeCh) => {
+    const ranges = [];
+    const stack = [];
+    for (let i = 0; i < text.length; i++) {
+      const ch = text[i];
+      if (ch === openCh) stack.push(i);
+      else if (ch === closeCh && stack.length) {
+        const start = stack.pop();
+        ranges.push([start, i]);
       }
-      return null;
-    };
-    return scan("{", "}") ?? scan("[", "]");
+    }
+    return ranges.sort((a,b) => a[0]-b[0]);
   };
 
-  // простой pretty для XML (встроенный фрагмент)
-  const tryInlineXML = (t) => {
+  // Пытаемся внутри строки красиво отформатировать все валидные JSON-фрагменты
+  const prettyInlineJSONs = (t) => {
+    let s = t;
+    // Собираем диапазоны по двум типам скобок
+    const ranges = [
+      ...findBalancedRanges(s, "{", "}"),
+      ...findBalancedRanges(s, "[", "]"),
+    ].sort((a,b) => a[0]-b[0]);
+
+    if (!ranges.length) return null;
+
+    // Заменяем с конца, чтобы не сдвигать индексы
+    for (let i = ranges.length - 1; i >= 0; i--) {
+      const [start, end] = ranges[i];
+      const frag = s.slice(start, end + 1);
+      try {
+        const obj = JSON.parse(frag);
+        const pretty = prettyJSON(obj);
+        s = s.slice(0, start) + pretty + s.slice(end + 1);
+      } catch {
+        // не JSON — пропускаем
+      }
+    }
+    return s === t ? null : s;
+  };
+
+  // Наивный pretty для встроенного XML (если встретится)
+  const prettyInlineXML = (t) => {
     const start = t.indexOf("<");
     const end = t.lastIndexOf(">");
     if (start === -1 || end <= start) return null;
     const frag = t.slice(start, end + 1).trim();
-    // чуть-чуть отсечём явный не-XML
     if (!/^<[^>]+>/.test(frag)) return null;
     try {
       const compact = frag.replace(/>\s+</g, "><");
@@ -65,21 +78,34 @@
   };
 
   const prettyCell = (val, key) => {
-    if (isPlaceholderEmpty(val)) return ""; // плейсхолдеры как пустые
+    if (isPlaceholderEmpty(val)) return ""; // плейсхолдеры считаем пустыми
     let v = val ?? "";
-    // message.exception — только первая строка
+
+    // Только первая строка для message.exception
     if (key === "message.exception") {
       v = v.split(/\r?\n/)[0] || "";
       if (isPlaceholderEmpty(v)) return "";
     }
-    // сначала пробуем весь JSON, потом встроенный JSON, потом XML
-    const whole = tryWholeJSON(v);
-    if (whole) return sanitizeForTSV(whole);
-    const inJson = tryInlineJSON(v);
-    if (inJson) return sanitizeForTSV(inJson);
-    const inXml = tryInlineXML(v);
-    if (inXml) return sanitizeForTSV(inXml);
-    // обычный текст
+
+    // 1) Пытаемся распарсить весь текст как JSON
+    try {
+      const trimmed = v.trim();
+      if ((trimmed.startsWith("{") && trimmed.endsWith("}")) ||
+          (trimmed.startsWith("[") && trimmed.endsWith("]"))) {
+        const obj = JSON.parse(trimmed);
+        return sanitizeForTSV(prettyJSON(obj));
+      }
+    } catch { /* not whole JSON */ }
+
+    // 2) Пытаемся отформатировать все встроенные JSON-фрагменты
+    const j = prettyInlineJSONs(v);
+    if (j) return sanitizeForTSV(j);
+
+    // 3) Пытаемся для XML (встроенный)
+    const x = prettyInlineXML(v);
+    if (x) return sanitizeForTSV(x);
+
+    // 4) Обычный текст
     return sanitizeForTSV(v);
   };
 
@@ -121,7 +147,7 @@
   let table = selectedTr[0]?.closest?.("table");
   if (table && buildIdxMap(table)) rows = extractRows(table, selectedTr);
 
-  // fallback: если не нашёл
+  // fallback
   if (!rows.length) {
     const anchorTr = sel.anchorNode?.parentElement?.closest?.("tr");
     const fbTable = anchorTr?.closest?.("table");
@@ -133,13 +159,16 @@
     return;
   }
 
-  // формируем TSV без заголовка (пустые ячейки остаются пустыми)
+  // TSV без заголовка; пустые ячейки остаются пустыми
   const lines = rows.map(r => r.join("\t"));
   const tsv = lines.join("\n");
 
   const copyTSV = async text => {
     try {
-      if (navigator.clipboard && window.isSecureContext) { await navigator.clipboard.writeText(text); return true; }
+      if (navigator.clipboard && window.isSecureContext) {
+        await navigator.clipboard.writeText(text);
+        return true;
+      }
       const ta = document.createElement("textarea");
       ta.value = text; ta.style.position = "fixed"; ta.style.top = "-1000px";
       document.body.appendChild(ta); ta.focus(); ta.select();
