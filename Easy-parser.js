@@ -34,43 +34,55 @@
   function showError(msg){ showMessage(msg,true,false); }
   function showSuccess(msg){ showMessage(msg,false,true); }
 
-  // --- Функция форматирования вложенных объектов {…} и […]) ---
-  function formatNestedObject(str) {
+  // --- Форматирование вложенных структур {…} и […] ---
+  function formatNestedObject(str, indent = 0) {
     if(!str) return str;
-    let indent = 0;
-    let result = '';
-    let i = 0;
-    while (i < str.length) {
-      const char = str[i];
-      if (char === '{' || char === '[') {
-        indent++;
-        result += char + '\n' + '  '.repeat(indent);
-      } else if (char === '}' || char === ']') {
-        indent--;
-        result += '\n' + '  '.repeat(Math.max(indent, 0)) + char; // безопасный indent
-      } else if (char === ',') {
-        result += char + '\n' + '  '.repeat(Math.max(indent, 0));
-      } else {
-        result += char;
+    const spaces = '  '.repeat(indent);
+
+    return str.replace(/([{\[])([\s\S]*?)([}\]])/g, (match, open, inner, close) => {
+      let depth = 0;
+      const parts = [];
+      let current = '';
+      for (let i = 0; i < inner.length; i++) {
+        const ch = inner[i];
+        if (ch === '{' || ch === '[') depth++;
+        if (ch === '}' || ch === ']') depth--;
+        if (ch === ',' && depth === 0) {
+          parts.push(current.trim());
+          current = '';
+        } else {
+          current += ch;
+        }
       }
-      i++;
-    }
-    return result;
+      if (current.trim()) parts.push(current.trim());
+
+      const isSingle = parts.length === 1 && !/[{\[]/.test(parts[0]);
+
+      if (isSingle) {
+        return open + parts[0].trim() + close;
+      }
+
+      const formattedInner = parts.map(p => {
+        return spaces + '  ' + formatNestedObject(p, indent + 1);
+      }).join(',\n');
+
+      return open + '\n' + formattedInner + '\n' + spaces + close;
+    });
   }
 
-  // --- Функция форматирования XML ---
+  // --- Форматирование XML ---
   function formatXML(xml) {
     if(!xml) return xml;
     let formatted = '';
     let indent = 0;
     const reg = /(>)(<)(\/*)/g;
-    xml = xml.replace(reg, '$1\n$2$3'); // переносы между тегами
+    xml = xml.replace(reg, '$1\n$2$3');
     const lines = xml.split('\n');
     lines.forEach(line => {
-      if(line.match(/^<\/\w/)) indent--; // закрывающий тег
+      if(line.match(/^<\/\w/)) indent--;
       const safeIndent = Math.max(indent, 0);
       formatted += '  '.repeat(safeIndent) + line + '\n';
-      if(line.match(/^<[^\/!?][^>]*[^\/]>$/)) indent++; // открывающий тег, кроме self-closing
+      if(line.match(/^<[^\/!?][^>]*[^\/]>$/)) indent++;
     });
     return formatted.trim();
   }
@@ -97,16 +109,24 @@
           if(idx>=0){
             const td = cells[idx];
             if(td && td.textContent.trim() && !noiseRe.test(td.textContent.trim()) && sel.containsNode(td,true)) {
-              let text = td.textContent.trim();
-              // форматируем XML
-              if(text.includes('<') && text.includes('>')) {
-                text = formatXML(text);
-              } 
-              // форматируем вложенные объекты
-              else if(text.includes('{') || text.includes('[')) {
-                text = formatNestedObject(text);
+              let val = td.textContent.trim();
+
+              // форматирование exception: только первая строка
+              if(key === 'message.exception'){
+                val = val.split('\n')[0];
               }
-              return text;
+
+              // форматирование вложенных {…} или […]
+              if(/[{\[]/.test(val)) {
+                val = formatNestedObject(val, 0);
+              }
+
+              // форматирование XML
+              if(/<[^>]+>/.test(val)) {
+                val = formatXML(val);
+              }
+
+              return val;
             }
           }
           return null;
@@ -114,13 +134,11 @@
 
         const time = getCellText('time');
         const message = getCellText('message.message');
-        let exception = getCellText('message.exception');
-        if(exception) exception = exception.split('\n')[0]; // первая строка
+        const exception = getCellText('message.exception');
         const payload = getCellText('payload');
 
-        // Формат с разделителем "|": time | message | exception | payload
-        const line = [time, message, exception, payload].filter(Boolean).join(' | ');
-        if(line) out.push(line);
+        const block = [time, message, exception, payload].filter(Boolean).join(' | ');
+        if(block) out.push(block);
       }
     });
 
