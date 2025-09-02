@@ -7,14 +7,72 @@
     return !t || t === "-" || t === "—" || t === "–" || t === "n/a" || t === "null";
   };
 
-  const tryParse = s => { try { return JSON.parse(s); } catch { return null; } };
+  const tryParseJson = s => { try { return JSON.parse(s); } catch { return null; } };
 
-  // Форматируем JSON только в body=...
+  // ---------- XML pretty-print ----------
+  const parseXml = (xmlStr) => {
+    try {
+      const parser = new DOMParser();
+      const doc = parser.parseFromString(xmlStr, "text/xml");
+      const err = doc.getElementsByTagName("parsererror")[0];
+      if (err) return null;
+      // serialize to get normalized xml
+      const ser = new XMLSerializer().serializeToString(doc);
+      return ser;
+    } catch { return null; }
+  };
+
+  const indentXml = (xmlStr) => {
+    // normalize tag boundaries
+    let s = xmlStr.replace(/>\s+</g, '><');
+    // line break between tags/comments/decls
+    s = s
+      .replace(/(>)(<)(\/*)/g, '$1\n$2$3')
+      .replace(/(\?>)(<)/g, '$1\n$2')
+      .replace(/(--\>)(<)/g, '$1\n$2');
+
+    const lines = s.split('\n').map(l => l.trim()).filter(l => l.length);
+    let indent = 0;
+    const out = [];
+    for (let line of lines) {
+      const isClosing = /^<\/[^>]+>/.test(line);
+      const isSelf = /\/>$/.test(line) || /^<[^>]+\/>$/.test(line);
+      const isDecl = /^<\?xml/.test(line);
+      const isComment = /^<!--/.test(line) && /-->$/.test(line);
+      if (isClosing) indent = Math.max(indent - 1, 0);
+      const pad = '  '.repeat(indent);
+      out.push(pad + line);
+      if (!isClosing && !isSelf && !isDecl && !isComment && /^<[^!?][^>]*>$/.test(line)) {
+        indent++;
+      }
+    }
+    return out.join('\n');
+  };
+
+  // Вырезает первый XML-блок из текста (начиная с первой '<'), валидирует, красиво форматирует и вставляет обратно.
+  function prettyXmlInText(text) {
+    if (!text || typeof text !== "string") return text;
+    const firstLt = text.indexOf('<');
+    if (firstLt === -1) return text;
+
+    // Берём от первой < до последнего > и пробуем как XML
+    const lastGt = text.lastIndexOf('>');
+    if (lastGt <= firstLt) return text;
+
+    const candidate = text.slice(firstLt, lastGt + 1);
+    const normalized = parseXml(candidate);
+    if (!normalized) return text;
+
+    const pretty = indentXml(normalized);
+    // Вставляем без лишнего завершающего \n
+    return text.slice(0, firstLt) + "\n" + pretty + "\n" + text.slice(lastGt + 1);
+  }
+
+  // ---------- JSON pretty (как раньше) ----------
   function prettyJsonAfterBody(text) {
     if (!text || typeof text !== "string") return text;
     const m = text.match(/\bbody\s*[:=]\s*/i);
     if (!m) return text;
-
     let i = m.index + m[0].length;
     while (i < text.length && text[i] !== "{" && text[i] !== "[") i++;
     if (i >= text.length) return text;
@@ -38,23 +96,31 @@
     if (depth !== 0) return text;
 
     const candidate = text.slice(i, j + 1);
-    if (open === "[" && !/[{\[]/.test(candidate)) return text; // не "обогащённые" массивы не трогаем
+    if (open === "[" && !/[{\[]/.test(candidate)) return text; // простые массивы (типа [1755]) не трогаем
 
-    const obj = tryParse(candidate);
+    const obj = tryParseJson(candidate);
     if (obj == null) return text;
 
     const pretty = JSON.stringify(obj, null, 2);
-    // без лишних завершающих переводов строки
     return text.slice(0, i) + "\n" + pretty + text.slice(j + 1);
   }
 
   function prettyPayload(text) {
     if (!text || typeof text !== "string") return text;
     const trimmed = text.trim();
-    const whole = tryParse(trimmed);
+    const whole = tryParseJson(trimmed);
     if (whole != null) return JSON.stringify(whole, null, 2);
-    return prettyJsonAfterBody(text);
+    // не JSON — пробуем XML целиком
+    const asXml = parseXml(trimmed);
+    if (asXml) return indentXml(asXml);
+    // иначе пробуем JSON в стиле body=...
+    const bodyJson = prettyJsonAfterBody(text);
+    if (bodyJson !== text) return bodyJson;
+    // иначе пробуем XML-фрагмент в тексте
+    return prettyXmlInText(text);
   }
+
+  // -------------------------------------
 
   const sel = window.getSelection();
   if (!sel || sel.rangeCount === 0) {
@@ -90,7 +156,9 @@
     if (w === "payload") {
       val = prettyPayload(val);
     } else if (w === "message.message") {
-      val = prettyJsonAfterBody(val);
+      // сначала JSON body=..., затем попытка красиво отформатировать XML-фрагмент (например SOAP)
+      const afterJson = prettyJsonAfterBody(val);
+      val = prettyXmlInText(afterJson);
     }
     return String(val).trim();
   };
@@ -104,9 +172,8 @@
         const raw = (i != null && tds[i]) ? tds[i].innerText : "";
         return processCell(w, raw);
       });
-      // ключевое изменение: выбрасываем ПУСТЫЕ поля вообще
-      const filtered = vals.filter(v => (v ?? "").trim() !== "");
-      return filtered;
+      // выбрасываем пустые поля — чтобы не было хвостовых табов/пустых колонок
+      return vals.filter(v => (v ?? "").trim() !== "");
     });
   };
 
@@ -156,11 +223,12 @@
     return;
   }
 
-  // Собираем строки: только НЕпустые поля, разделённые табами, без хвостовых табов
-  const lines = rows.map(r => r.join("\t").trimEnd());
-  // Убираем возможные полностью пустые строки (если вдруг все поля оказались пустыми)
-  const nonEmptyLines = lines.filter(line => line.trim() !== "");
-  const tsv = nonEmptyLines.join("\n");
+  // Только непустые поля, без хвостовых табов и лишних переводов
+  const lines = rows
+    .map(r => r.join("\t").replace(/\s+$/g, ""))   // trimEnd без среза полезных \n внутри XML/JSON
+    .filter(line => line.trim() !== "");
+
+  const tsv = lines.join("\n");
 
   const copyTSV = async text => {
     try {
@@ -174,5 +242,5 @@
 
   const ok = await copyTSV(tsv);
   if (!ok) console.log(tsv);
-  alert(ok ? `Скопировано ${nonEmptyLines.length} строк в буфер.` : "Не получилось скопировать в буфер. Результат выведен в консоль.");
+  alert(ok ? `Скопировано ${lines.length} строк в буфер.` : "Не получилось скопировать в буфер. Результат выведен в консоль.");
 })();
