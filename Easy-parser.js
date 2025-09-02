@@ -1,5 +1,4 @@
 (function(){
-  // --- Система уведомлений ---
   if(!window.__notifContainer){
     const c = document.createElement('div');
     c.id = 'notif-container';
@@ -34,176 +33,137 @@
   function showError(msg){ showMessage(msg,true,false); }
   function showSuccess(msg){ showMessage(msg,false,true); }
 
-  // --- Утилита: разделение верхнего уровня по запятым (учитывает кавычки и вложенности) ---
+  // --- Разбивает строку на верхнеуровневые пары по запятым, учитывая {…}, […], кавычки ---
   function splitTopLevel(str) {
     const parts = [];
     let curr = '';
     let depth = 0;
     let inString = false;
     let prev = '';
-    for (let i = 0; i < str.length; i++) {
+    for(let i=0;i<str.length;i++){
       const ch = str[i];
-      if (ch === '"' && prev !== '\\') { inString = !inString; curr += ch; prev = ch; continue; }
-      if (!inString) {
-        if (ch === '{' || ch === '[') depth++;
-        else if (ch === '}' || ch === ']') depth--;
-        if (ch === ',' && depth === 0) { parts.push(curr); curr = ''; prev = ch; continue; }
+      if(ch === '"' && prev !== '\\'){ inString = !inString; curr += ch; prev=ch; continue; }
+      if(!inString){
+        if(ch==='{' || ch==='[') depth++;
+        else if(ch==='}' || ch===']') depth--;
+        if(ch===',' && depth===0){ parts.push(curr); curr=''; prev=ch; continue; }
       }
       curr += ch;
       prev = ch;
     }
-    if (curr.length > 0) parts.push(curr);
-    return parts.map(p => p.trim()).filter(p => !(p === '' && parts.length === 1 && str.trim() === ''));
+    if(curr) parts.push(curr);
+    return parts.map(p=>p.trim()).filter(Boolean);
   }
 
-  // --- Форматирование вложенных структур {…} и […] ---
-  function formatNestedObject(str, indent = 0) {
-    if (!str) return str;
+  function formatNestedObject(str, indent=0){
+    if(!str) return str;
     const spaces = '  '.repeat(indent);
-    let out = '';
-    let i = 0;
-
-    while (i < str.length) {
-      const ch = str[i];
-
-      if (ch === '{' || ch === '[') {
-        const open = ch;
-        const close = (ch === '{') ? '}' : ']';
-        let j = i + 1;
-        let depth = 1;
-        let inString = false;
-        let prev = '';
-        while (j < str.length && depth > 0) {
-          const c = str[j];
-          if (c === '"' && prev !== '\\') inString = !inString;
-          if (!inString) {
-            if (c === open) depth++;
-            else if (c === close) depth--;
-          }
-          prev = c;
-          j++;
-        }
-        if (depth !== 0) { out += str.slice(i); break; }
-
-        const inner = str.slice(i + 1, j - 1);
-        if (inner.trim() === '') {
-          out += open + close;
-          i = j;
-          continue;
-        }
-
-        const parts = splitTopLevel(inner);
-        const isSingleSimple = parts.length === 1 && !/[{\[]/.test(parts[0]) && !parts[0].includes('\n');
-
-        if (isSingleSimple) {
-          out += open + parts[0].trim() + close;
-        } else {
-          out += open + '\n';
-          for (let k = 0; k < parts.length; k++) {
-            const p = parts[k];
-            out += spaces + '  ' + formatNestedObject(p, indent + 1);
-            if (k < parts.length - 1) out += ',\n';
-            else out += '\n';
-          }
-          out += spaces + close;
-        }
-        i = j;
-      } else {
-        out += ch;
-        i++;
-      }
+    // key=[…] отдельно
+    const m = str.match(/^([^=]+)=\[(.*)\]$/);
+    if(m){
+      const key = m[1];
+      const inner = m[2];
+      const formattedInner = formatNestedObject('['+inner+']', indent+1);
+      return spaces + key + '=' + formattedInner;
     }
-    return out;
+    if(str[0]==='{' || str[0]==='['){
+      const open = str[0], close = (open==='{'?'}':']');
+      let inner = str.slice(1,-1);
+      const parts = splitTopLevel(inner);
+      if(parts.length===0) return open+close;
+      let out = open + '\n';
+      parts.forEach((p,i)=>{
+        out += formatNestedObject(p, indent+1);
+        if(i<parts.length-1) out += ',\n';
+        else out += '\n';
+      });
+      out += spaces + close;
+      return out;
+    }
+    return spaces + str;
   }
 
-  // --- Форматирование XML ---
-  function formatXML(xml) {
+  function formatURLEncoded(str, indent=0){
+    if(!str) return str;
+    const spaces = '  '.repeat(indent);
+    const pairs = str.split('&').map(p=>{
+      const [k,v] = p.split('=');
+      try { return k+'='+decodeURIComponent(v||''); } catch { return p; }
+    });
+    if(pairs.length===1) return spaces + '{ '+pairs[0]+' }';
+    return spaces + '{\n' + pairs.map(p=>spaces+'  '+p).join(',\n') + '\n'+spaces+'}';
+  }
+
+  function formatXML(xml){
     if(!xml) return xml;
-    let formatted = '';
-    let indent = 0;
+    let formatted='';
+    let indent=0;
     const reg = /(>)(<)(\/*)/g;
-    xml = xml.replace(reg, '$1\n$2$3');
-    const lines = xml.split('\n');
-    lines.forEach(line => {
+    xml = xml.replace(reg,'$1\n$2$3');
+    xml.split('\n').forEach(line=>{
       if(line.match(/^<\/\w/)) indent--;
-      const safeIndent = Math.max(indent, 0);
-      formatted += '  '.repeat(safeIndent) + line + '\n';
+      const safeIndent = Math.max(indent,0);
+      formatted += '  '.repeat(safeIndent)+line+'\n';
       if(line.match(/^<[^\/!?][^>]*[^\/]>$/)) indent++;
     });
     return formatted.trim();
   }
 
-  // --- Форматирование URL-encoded строки ---
-  function formatURLEncoded(str, indent = 0) {
-    if (!str) return str;
-    const spaces = '  '.repeat(indent);
-    const pairs = str.split('&').map(p => {
-      const [k, v] = p.split('=');
-      try { return k + '=' + decodeURIComponent(v || ''); } catch { return p; }
+  // --- Разбор строки запроса на пары key=value верхнего уровня ---
+  function parseTopLevelPairs(str){
+    const pairs = splitTopLevel(str);
+    const obj = {};
+    pairs.forEach(p=>{
+      const idx = p.indexOf('=');
+      if(idx>0){
+        const key = p.slice(0,idx).trim();
+        const val = p.slice(idx+1).trim();
+        obj[key] = val;
+      } else obj[p.trim()] = '';
     });
-    if (pairs.length === 1) return '{ ' + pairs[0] + ' }';
-    return '{\n' + pairs.map(p => spaces + '  ' + p).join(',\n') + '\n' + spaces + '}';
+    return obj;
   }
 
-  // --- Основная логика ---
   try{
     const sel = window.getSelection();
     if(!sel || sel.rangeCount===0 || !sel.toString().trim()){ showError("Логи не выделены"); return; }
 
-    const noiseRe = /^(INFO|DEBUG|WARN|WARNING|ERROR|TRACE|-|–|—)$/i;
     const trs = Array.from(document.querySelectorAll('tr'));
-    const out = [];
+    const out=[];
 
     trs.forEach(tr=>{
       const cells = Array.from(tr.querySelectorAll('td,th'));
       const selected = cells.filter(td=>sel.containsNode(td,true));
-      if(selected.length>0){
-        const table = tr.closest('table');
-        const headerRow = table.querySelector('thead tr') || Array.from(table.querySelectorAll('tr')).find(rw=>rw.querySelectorAll('th').length>0) || table.querySelector('tr');
-        const ths = Array.from(headerRow.querySelectorAll('th,td'));
+      if(selected.length===0) return;
+      const td = selected[0];
+      let val = td.textContent.trim();
 
-        function getCellText(key){
-          const idx = ths.findIndex(th=>th.textContent.trim().toLowerCase()===key);
-          if(idx>=0){
-            const td = cells[idx];
-            if(td && td.textContent.trim() && !noiseRe.test(td.textContent.trim()) && sel.containsNode(td,true)) {
-              let val = td.textContent.trim();
+      // --- парсим верхнеуровневые пары ---
+      const obj = parseTopLevelPairs(val);
+      const formattedParts = [];
 
-              // exception: только первая строка
-              if(key === 'message.exception'){ val = val.split('\n')[0]; }
+      Object.keys(obj).forEach(k=>{
+        let v = obj[k];
+        // exception только первая строка
+        if(k.toLowerCase().includes('exception')) v = v.split('\n')[0];
+        // URL-encoded
+        else if(/^[^=]+=[^=]+/.test(v) && v.includes('&')) v = formatURLEncoded(v,0);
+        // XML
+        else if(/<[^>]+>/.test(v)) v = formatXML(v);
+        // вложенные объекты/массивы и key=[…]
+        else if(/[{\[]/.test(v)) v = formatNestedObject(v,0);
 
-              // URL-encoded форматирование
-              if(/^[^=]+=[^=]+/.test(val) && val.includes('&')) {
-                val = formatURLEncoded(val, 0);
-              }
-              // вложенные {…} или […]
-              else if(/[{\[]/.test(val)) { val = formatNestedObject(val, 0); }
-              // XML
-              if(/<[^>]+>/.test(val)) { val = formatXML(val); }
+        formattedParts.push(k+'='+v);
+      });
 
-              return val;
-            }
-          }
-          return null;
-        }
-
-        const time = getCellText('time');
-        const message = getCellText('message.message');
-        const exception = getCellText('message.exception');
-        const payload = getCellText('payload');
-
-        const block = [time, message, exception, payload].filter(Boolean).join('  ');
-        if(block) out.push(block);
-      }
+      out.push(formattedParts.join('  '));
     });
 
     if(out.length===0){ showError("Нет полезных логов для копирования"); return; }
 
-    navigator.clipboard.writeText(out.join('\n'))
-      .then(()=>showSuccess("Логи скопированы"))
-      .catch(()=>showError("Ошибка при копировании"));
+    navigator.clipboard.writeText(out.join('\n')).then(()=>showSuccess("Логи скопированы")).catch(()=>showError("Ошибка при копировании"));
 
-  } catch(e){
+  }catch(e){
     console.error(e);
     showError("Что-то пошло не так");
   }
