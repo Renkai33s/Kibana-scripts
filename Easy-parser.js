@@ -34,86 +34,60 @@
   function showError(msg){ showMessage(msg,true,false); }
   function showSuccess(msg){ showMessage(msg,false,true); }
 
-  // --- Pretty print для строки ---
-  function prettyPrint(value){
-    if(!value) return value;
-    value = value.trim();
-
-    // Попытка распарсить JSON
-    try {
-      const json = JSON.parse(value);
-      return JSON.stringify(json, null, 2);
-    } catch(e){}
-
-    // Попытка распарсить URL-encoded
-    try {
-      const decoded = decodeURIComponent(value);
-      // если раскодированное отличается от исходного, используем его
-      if(decoded !== value) return decoded;
-    } catch(e){}
-
-    // Попытка форматировать XML
-    if(value.startsWith('<') && value.endsWith('>')){
-      try{
-        const parser = new DOMParser();
-        const xmlDoc = parser.parseFromString(value, "application/xml");
-        const serializer = new XMLSerializer();
-        const xmlStr = serializer.serializeToString(xmlDoc);
-        // простой pretty print: добавим отступы через replace
-        return xmlStr.replace(/></g, '>\n<');
-      } catch(e){}
-    }
-
-    return value; // если ни одно не подошло, возвращаем как есть
+  function prettyPrintJSON(str){
+    try { return JSON.stringify(JSON.parse(str), null, 2); }
+    catch(e) { return str; } // если не JSON — возвращаем как есть
   }
 
-  // --- Основная логика ---
-  try{
-    const sel = window.getSelection();
-    if(!sel || sel.rangeCount===0 || !sel.toString().trim()){ showError("Логи не выделены"); return; }
+  function prettyPrintXML(str){
+    try {
+      const parser = new DOMParser();
+      const xmlDoc = parser.parseFromString(str, "application/xml");
+      const serializer = new XMLSerializer();
+      return vkbeautify.xml(serializer.serializeToString(xmlDoc)); // используем vkbeautify для отступов
+    } catch(e) { return str; }
+  }
 
-    const noiseRe = /^(INFO|DEBUG|WARN|WARNING|ERROR|TRACE|-|–|—)$/i;
-    const trs = Array.from(document.querySelectorAll('tr'));
-    const out = [];
+  // Вставляем vkbeautify в скрипт
+  function loadVkBeautify(callback){
+    const s = document.createElement('script');
+    s.src = 'https://cdnjs.cloudflare.com/ajax/libs/vkbeautify/0.99.00/vkbeautify.js';
+    s.onload = callback;
+    document.head.appendChild(s);
+  }
 
-    trs.forEach(tr=>{
-      const cells = Array.from(tr.querySelectorAll('td,th'));
-      const selected = cells.filter(td=>sel.containsNode(td,true));
-      if(selected.length>0){
-        const table = tr.closest('table');
-        const headerRow = table.querySelector('thead tr') || Array.from(table.querySelectorAll('tr')).find(rw=>rw.querySelectorAll('th').length>0) || table.querySelector('tr');
-        const ths = Array.from(headerRow.querySelectorAll('th,td'));
+  loadVkBeautify(()=>{
+    try{
+      const sel = window.getSelection();
+      if(!sel || sel.rangeCount===0 || !sel.toString().trim()){ showError("Логи не выделены"); return; }
 
-        function getCellText(key){
-          const idx = ths.findIndex(th=>th.textContent.trim().toLowerCase()===key);
-          if(idx>=0){
-            const td = cells[idx];
-            if(td && td.textContent.trim() && !noiseRe.test(td.textContent.trim()) && sel.containsNode(td,true))
-              return td.textContent.trim();
-          }
-          return null;
+      const text = sel.toString();
+      const lines = text.split(/\r?\n/).filter(Boolean);
+
+      const out = [];
+
+      let buffer = '';
+      lines.forEach(line=>{
+        line = line.trim();
+        // Пытаемся распарсить как JSON
+        if(line.startsWith('{') && line.endsWith('}')){
+          buffer += prettyPrintJSON(line) + '\n';
         }
+        // Пытаемся распарсить как XML
+        else if(line.startsWith('<') && line.endsWith('>')){
+          buffer += prettyPrintXML(line) + '\n';
+        } else {
+          buffer += line + '\n';
+        }
+      });
 
-        const time = prettyPrint(getCellText('time'));
-        const message = prettyPrint(getCellText('message.message'));
-        let exception = getCellText('message.exception');
-        if(exception) exception = prettyPrint(exception.split('\n')[0]); // только первая строка
-        const payload = prettyPrint(getCellText('payload'));
+      navigator.clipboard.writeText(buffer.trim())
+        .then(()=>showSuccess("Логи скопированы с форматированием"))
+        .catch(()=>showError("Ошибка при копировании"));
 
-        // Формат с разделителем "|": time | message | exception | payload
-        const line = [time, message, exception, payload].filter(Boolean).join(' | ');
-        if(line) out.push(line);
-      }
-    });
-
-    if(out.length===0){ showError("Нет полезных логов для копирования"); return; }
-
-    navigator.clipboard.writeText(out.join('\n'))
-      .then(()=>showSuccess("Логи скопированы"))
-      .catch(()=>showError("Ошибка при копировании"));
-
-  } catch(e){
-    console.error(e);
-    showError("Что-то пошло не так");
-  }
+    } catch(e){
+      console.error(e);
+      showError("Что-то пошло не так");
+    }
+  });
 })();
