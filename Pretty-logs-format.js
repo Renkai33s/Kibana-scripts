@@ -9,21 +9,18 @@
 
   const tryParse = s => { try { return JSON.parse(s); } catch { return null; } };
 
-  // Форматирует JSON только у body=... (не трогаем [1755] и т.п.)
+  // Форматируем JSON только в body=...
   function prettyJsonAfterBody(text) {
     if (!text || typeof text !== "string") return text;
     const m = text.match(/\bbody\s*[:=]\s*/i);
     if (!m) return text;
 
     let i = m.index + m[0].length;
-
-    // найти первую { или [ после body
     while (i < text.length && text[i] !== "{" && text[i] !== "[") i++;
     if (i >= text.length) return text;
 
     const open = text[i];
     const close = open === "{" ? "}" : "]";
-    // если это массив — форматируем только если внутри есть объект/массив
     let depth = 0, j = i, inStr = false, escaped = false;
 
     for (; j < text.length; j++) {
@@ -35,27 +32,22 @@
       } else {
         if (c === '"') inStr = true;
         else if (c === open) depth++;
-        else if (c === close) {
-          depth--;
-          if (depth === 0) break;
-        }
+        else if (c === close) { depth--; if (depth === 0) break; }
       }
     }
     if (depth !== 0) return text;
 
     const candidate = text.slice(i, j + 1);
-
-    // если массив — форматируем только "богатые" (с объектами/массивами внутри)
-    if (open === "[" && !/[{\[]/.test(candidate)) return text;
+    if (open === "[" && !/[{\[]/.test(candidate)) return text; // не "обогащённые" массивы не трогаем
 
     const obj = tryParse(candidate);
     if (obj == null) return text;
 
     const pretty = JSON.stringify(obj, null, 2);
-    return text.slice(0, i) + "\n" + pretty + "\n" + text.slice(j + 1);
+    // без лишних завершающих переводов строки
+    return text.slice(0, i) + "\n" + pretty + text.slice(j + 1);
   }
 
-  // Для колонки payload — пробуем весь текст как JSON; если не вышло, пытаемся как в body
   function prettyPayload(text) {
     if (!text || typeof text !== "string") return text;
     const trimmed = text.trim();
@@ -85,39 +77,42 @@
     return idxMap.size > 0;
   };
 
+  const processCell = (w, raw) => {
+    let val = (raw ?? "").toString();
+    if (w === "message.exception") {
+      if (isEmptyToken(val)) return "";
+      val = (val.split(/\r?\n/)[0] || "").trim();
+      if (isEmptyToken(val)) return "";
+      return val;
+    }
+    if (isEmptyToken(val)) return "";
+
+    if (w === "payload") {
+      val = prettyPayload(val);
+    } else if (w === "message.message") {
+      val = prettyJsonAfterBody(val);
+    }
+    return String(val).trim();
+  };
+
   const extractFromTable = (tableEl, trs) => {
     const bodyTrs = trs.length ? trs : Array.from(tableEl.querySelectorAll("tbody tr, tr"));
     return bodyTrs.map(tr => {
       const tds = Array.from(tr.querySelectorAll("td, th"));
-      return wanted.map(w => {
+      const vals = wanted.map(w => {
         const i = idxMap.get(norm(w));
-        let val = (i != null && tds[i]) ? tds[i].innerText : "";
-
-        // нормализация значений
-        if (w === "message.exception") {
-          if (isEmptyToken(val)) return "";
-          val = (val.split(/\r?\n/)[0] || "").trim();
-          return isEmptyToken(val) ? "" : val;
-        }
-
-        if (isEmptyToken(val)) return "";
-
-        if (w === "payload") {
-          val = prettyPayload(val);
-        } else if (w === "message.message") {
-          val = prettyJsonAfterBody(val);
-        }
-
-        return String(val).trim();
+        const raw = (i != null && tds[i]) ? tds[i].innerText : "";
+        return processCell(w, raw);
       });
+      // ключевое изменение: выбрасываем ПУСТЫЕ поля вообще
+      const filtered = vals.filter(v => (v ?? "").trim() !== "");
+      return filtered;
     });
   };
 
-  // 1) обычная <table>
+  // 1) обычная таблица
   let table = selectedTr[0]?.closest?.("table");
-  if (table && buildIdxMapFromTable(table)) {
-    rows = extractFromTable(table, selectedTr);
-  }
+  if (table && buildIdxMapFromTable(table)) rows = extractFromTable(table, selectedTr);
 
   // 2) ARIA grid
   if (!rows.length) {
@@ -135,23 +130,12 @@
         if (idxMap.size) {
           rows = selectedRoleRows.map(r => {
             const cells = Array.from(r.querySelectorAll('[role="gridcell"], [role="cell"]'));
-            return wanted.map(w => {
+            const vals = wanted.map(w => {
               const i = idxMap.get(norm(w));
-              let val = (i != null && cells[i]) ? cells[i].innerText : "";
-
-              if (w === "message.exception") {
-                if (isEmptyToken(val)) return "";
-                val = (val.split(/\r?\n/)[0] || "").trim();
-                return isEmptyToken(val) ? "" : val;
-              }
-
-              if (isEmptyToken(val)) return "";
-
-              if (w === "payload") val = prettyPayload(val);
-              else if (w === "message.message") val = prettyJsonAfterBody(val);
-
-              return String(val).trim();
+              const raw = (i != null && cells[i]) ? cells[i].innerText : "";
+              return processCell(w, raw);
             });
+            return vals.filter(v => (v ?? "").trim() !== "");
           });
         }
       }
@@ -172,9 +156,11 @@
     return;
   }
 
-  // без заголовка; пустые значения — просто пусто; JSON может быть многострочным
-  const lines = rows.map(r => r.map(v => (v ?? "").trim()).join("\t"));
-  const tsv = lines.join("\n");
+  // Собираем строки: только НЕпустые поля, разделённые табами, без хвостовых табов
+  const lines = rows.map(r => r.join("\t").trimEnd());
+  // Убираем возможные полностью пустые строки (если вдруг все поля оказались пустыми)
+  const nonEmptyLines = lines.filter(line => line.trim() !== "");
+  const tsv = nonEmptyLines.join("\n");
 
   const copyTSV = async text => {
     try {
@@ -187,6 +173,6 @@
   };
 
   const ok = await copyTSV(tsv);
-  alert(ok ? `Скопировано ${rows.length} строк в буфер.` : "Не получилось скопировать в буфер. Результат выведен в консоль.");
   if (!ok) console.log(tsv);
+  alert(ok ? `Скопировано ${nonEmptyLines.length} строк в буфер.` : "Не получилось скопировать в буфер. Результат выведен в консоль.");
 })();
