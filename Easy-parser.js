@@ -34,37 +34,39 @@
   function showError(msg){ showMessage(msg,true,false); }
   function showSuccess(msg){ showMessage(msg,false,true); }
 
-  // --- Pretty print тела ---
-  function prettyPrintBody(body){
-    if(!body) return body;
-    body = body.trim();
+  // --- Pretty print in-place ---
+  function prettyPrintInPlace(str){
+    if(!str) return str;
 
-    // JSON
-    if(body.startsWith('{') || body.startsWith('[')){
-      try {
-        return JSON.stringify(JSON.parse(body), null, 2);
-      } catch {}
-    }
+    // --- JSON / URL-encoded ---
+    str = str.replace(/body=({.*?}|\[.*?\])/gs, (match, p1)=>{
+      try { return 'body=' + JSON.stringify(JSON.parse(p1), null, 2); } catch { return match; }
+    });
 
-    // URL-encoded
-    if(body.includes('=') && body.includes('&')){
-      try {
-        const params = new URLSearchParams(body);
-        return [...params].map(([k,v])=>`${k}: ${v}`).join('\n');
-      } catch {}
-    }
+    str = str.replace(/body=([^\s]+)/g, (match, p1)=>{
+      if(p1.includes('=') && p1.includes('&')){
+        try {
+          const params = new URLSearchParams(p1);
+          const formatted = [...params].map(([k,v])=>`${k}: ${v}`).join('\n');
+          return 'body=' + formatted;
+        } catch { return match; }
+      }
+      return match;
+    });
 
-    // XML
-    if(body.startsWith('<')){
+    // --- SOAP/XML messages ---
+    str = str.replace(/SOAP-(?:OUT|IN) message:\s*(<.+>)/gs, (match, p1)=>{
       try {
         const parser = new DOMParser();
-        const xmlDoc = parser.parseFromString(body, "application/xml");
+        const xmlDoc = parser.parseFromString(p1, "application/xml");
         const serializer = new XMLSerializer();
-        return serializer.serializeToString(xmlDoc);
-      } catch {}
-    }
+        // Добавляем переносы и отступы вручную
+        const pretty = vkbeautify.xml(serializer.serializeToString(xmlDoc));
+        return match.replace(p1, pretty);
+      } catch { return match; }
+    });
 
-    return body;
+    return str;
   }
 
   // --- Основная логика ---
@@ -99,17 +101,8 @@
         if(exception) exception = exception.split('\n')[0];
         let payload = getCellText('payload');
 
-        // Извлечение body внутри строки
-        const bodyMatch = (txt)=>{
-          if(!txt) return null;
-          let m = txt.match(/body=(.+)$/s);
-          if(m) return m[1];
-          m = txt.match(/SOAP-(?:OUT|IN) message:\s*(<.+>)/s);
-          return m ? m[1] : null;
-        };
-
-        message = prettyPrintBody(bodyMatch(message) || message);
-        payload = prettyPrintBody(bodyMatch(payload) || payload);
+        message = prettyPrintInPlace(message);
+        payload = prettyPrintInPlace(payload);
 
         const line = [time, message, exception, payload].filter(Boolean).join(' | ');
         if(line) out.push(line);
@@ -126,4 +119,5 @@
     console.error(e);
     showError("Что-то пошло не так");
   }
+
 })();
