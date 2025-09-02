@@ -34,43 +34,36 @@
   function showError(msg){ showMessage(msg,true,false); }
   function showSuccess(msg){ showMessage(msg,false,true); }
 
-  // --- Pretty Print для частичных JSON, XML, URL-encoded ---
-  function prettyPartial(str){
-    if(!str) return str;
+  // --- Helper: Pretty Print ---
+  function prettyPrint(value){
+    if(!value) return value;
 
-    // --- JSON фрагменты ---
-    str = str.replace(/({[\s\S]*?})/g, (match)=>{
-      try{
-        const obj = JSON.parse(match);
-        return JSON.stringify(obj, null, 2);
-      } catch(e){ return match; }
-    });
+    // Попробуем JSON
+    try {
+      const obj = JSON.parse(value);
+      return JSON.stringify(obj, null, 2);
+    } catch {}
 
-    // --- XML фрагменты ---
-    str = str.replace(/(<[?\/]?[a-zA-Z][^>]*>[\s\S]*?<\/[a-zA-Z][^>]*>)/g, (match)=>{
-      try{
+    // Попробуем URL-encoded
+    try {
+      const params = new URLSearchParams(value);
+      if([...params].length > 0){
+        return [...params].map(([k,v]) => `${k}: ${v}`).join('\n');
+      }
+    } catch {}
+
+    // Попробуем XML
+    if(value.trim().startsWith('<') && value.trim().endsWith('>')){
+      try {
         const parser = new DOMParser();
-        const xmlDoc = parser.parseFromString(match, "application/xml");
-        if(!xmlDoc.querySelector("parsererror")){
-          const serializer = new XMLSerializer();
-          return serializer.serializeToString(xmlDoc).replace(/></g, '>\n<');
-        }
-      } catch(e){}
-      return match;
-    });
+        const xmlDoc = parser.parseFromString(value, "application/xml");
+        const serializer = new XMLSerializer();
+        return serializer.serializeToString(xmlDoc);
+      } catch {}
+    }
 
-    // --- URL-encoded ---
-    str = str.replace(/([a-zA-Z0-9%]+=[^&\s]+(&[a-zA-Z0-9%]+=[^&\s]+)*)/g, (match)=>{
-      try{
-        const decoded = decodeURIComponent(match);
-        if(decoded !== match){
-          return decoded.replace(/&/g, '\n');
-        }
-      } catch(e){}
-      return match;
-    });
-
-    return str;
+    // Если ничего не подошло, просто вернём как есть
+    return value;
   }
 
   // --- Основная логика ---
@@ -101,12 +94,17 @@
         }
 
         const time = getCellText('time');
-        const message = prettyPartial(getCellText('message.message'));
+        const message = getCellText('message.message');
         let exception = getCellText('message.exception');
-        if(exception) exception = prettyPartial(exception.split('\n')[0]);
-        const payload = prettyPartial(getCellText('payload'));
+        if(exception) exception = exception.split('\n')[0];
+        let payload = getCellText('payload');
 
-        const line = [time, message, exception, payload].filter(Boolean).join(' | ');
+        // Pretty print для message и payload
+        const ppMessage = message ? prettyPrint(message) : null;
+        const ppPayload = payload ? prettyPrint(payload) : null;
+
+        // Формат с разделителем "|"
+        const line = [time, ppMessage, exception, ppPayload].filter(Boolean).join(' | ');
         if(line) out.push(line);
       }
     });
