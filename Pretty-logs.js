@@ -68,7 +68,7 @@
         const payload = getCellText('payload');
 
         // Формат с разделителем "|": time | message | exception | payload
-        const line = [time, message, exception, payload].filter(Boolean).join('  ');
+        const line = [time, message, exception, payload].filter(Boolean).join(' ');
         if(line) out.push(line);
       }
     });
