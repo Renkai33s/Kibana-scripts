@@ -1,5 +1,5 @@
 (function(){
-  // --- Система уведомлений ---
+  // --- Уведомления ---
   if(!window.__notifContainer){
     const c=document.createElement('div');
     c.id='notif-container';
@@ -12,7 +12,6 @@
     window.__notifContainer=c;
     window.__currentNotif=null;
   }
-
   function showMessage(msg,isError=false,isSuccess=false){
     if(window.__currentNotif){ window.__currentNotif.remove(); window.__currentNotif=null; }
     const d=document.createElement('div');
@@ -30,57 +29,60 @@
     window.__currentNotif=d;
     setTimeout(()=>{ if(window.__currentNotif===d){ d.remove(); window.__currentNotif=null } },2000);
   }
-
   function showError(msg){ showMessage(msg,true,false); }
   function showSuccess(msg){ showMessage(msg,false,true); }
 
-  // --- Рекурсивное форматирование JSON-объекта ---
-  function formatJSON(obj, indent=0){
+  // --- Форматирование JSON-подобного текста ---
+  function formatJSONText(text, indent=0){
     const spaces='  '.repeat(indent);
-    if(obj===null || typeof obj!=='object') return JSON.stringify(obj);
-
-    if(Array.isArray(obj)){
-      if(obj.length===0) return '[]';
-      const allSimple=obj.every(x=>x===null||typeof x!=='object');
-      if(obj.length===1 && allSimple) return `[${formatJSON(obj[0])}]`;
-      return '[\n'+obj.map(x=>spaces+'  '+formatJSON(x,indent+1)).join(',\n')+'\n'+spaces+']';
-    } else {
-      const keys=Object.keys(obj);
-      if(keys.length===0) return '{}';
-      const allSimple=keys.every(k=>obj[k]===null||typeof obj[k]!=='object');
-      if(keys.length===1 && allSimple) return `{${keys[0]}:${formatJSON(obj[keys[0]])}}`;
-      return '{\n'+keys.map(k=>spaces+'  '+k+': '+formatJSON(obj[k],indent+1)).join(',\n')+'\n'+spaces+'}';
-    }
-  }
-
-  // --- Универсальная обработка body / payload ---
-  function formatBody(text){
-    if(!text) return "";
-
     text=text.trim();
+    if(!text.startsWith('{') && !text.startsWith('[')) return text;
 
-    // JSON
-    if(/^\s*[\{\[]/.test(text)){
-      try{
-        const parsed=JSON.parse(text);
-        return formatJSON(parsed);
-      } catch { return text; }
+    let out='',i=0;
+    while(i<text.length){
+      const ch=text[i];
+      if(ch==='{'||ch==='['){
+        const open=ch,close=ch==='{'?'}':']';
+        let j=i+1,depth=1,inString=false,prev='';
+        while(j<text.length && depth>0){
+          const c=text[j];
+          if(c==='"' && prev!=='\\') inString=!inString;
+          if(!inString){ if(c===open) depth++; else if(c===close) depth--; }
+          prev=c;j++;
+        }
+        const inner=text.slice(i+1,j-1);
+        const innerParts=splitTopLevel(inner);
+        const isSingleSimple=innerParts.length===1 && !/[\{\[]/.test(innerParts[0]);
+        if(isSingleSimple) out+=open+innerParts[0]+close;
+        else{
+          out+=open+'\n';
+          for(let k=0;k<innerParts.length;k++){
+            out+=spaces+'  '+formatJSONText(innerParts[k],indent+1);
+            if(k<innerParts.length-1) out+=',\n'; else out+='\n';
+          }
+          out+=spaces+close;
+        }
+        i=j;
+      } else { out+=ch; i++; }
     }
+    return out;
 
-    // XML
-    if(/<[a-zA-Z]/.test(text) && />/.test(text)) return formatXML(text);
-
-    // form-urlencoded
-    if(text.includes("=") && text.includes("&")){
-      const parts=text.split("&");
-      if(parts.length===1) return `{${decodeURIComponent(parts[0])}}`;
-      return "{\n  "+parts.map(p=>{
-        const [k,v]=p.split("=");
-        return `${decodeURIComponent(k)}=${decodeURIComponent(v??"")}`;
-      }).join(",\n  ")+"\n}";
+    function splitTopLevel(s){
+      const parts=[],inString=false,prev='',stack=[];
+      let curr='',instr=false;
+      for(let c,i=0;i<s.length;i++){
+        c=s[i];
+        if(c==='"' && prev!=='\\') instr=!instr;
+        if(!instr){
+          if(c==='{'||c==='[') stack.push(c);
+          if(c==='}'||c===']') stack.pop();
+          if(c===',' && stack.length===0){ parts.push(curr); curr=''; prev=c; continue; }
+        }
+        curr+=c; prev=c;
+      }
+      if(curr) parts.push(curr);
+      return parts.map(p=>p.trim()).filter(Boolean);
     }
-
-    return text;
   }
 
   // --- Форматирование XML ---
@@ -94,7 +96,7 @@
           line=line.trim();
           if(!line) return '';
           let indent=0;
-          if(/^<\w[^>]*>.*<\/\w/.test(line)) indent=0; // одиночный тег с текстом
+          if(/^<\w[^>]*>.*<\/\w/.test(line)) indent=0;
           else if(/^<\/\w/.test(line)){ pad--; indent=0; }
           else if(/^<\w[^>]*[^\/]>/.test(line)) indent=1;
           const res="  ".repeat(Math.max(pad,0))+line;
@@ -103,7 +105,27 @@
         })
         .filter(Boolean)
         .join("\n");
-    } catch { return xml; }
+    } catch{return xml;}
+  }
+
+  // --- Форматирование form-urlencoded ---
+  function formatFormUrlEncoded(text){
+    const parts=text.split("&");
+    if(parts.length===1) return `{${decodeURIComponent(parts[0])}}`;
+    return "{\n  "+parts.map(p=>{
+      const [k,v]=p.split("=");
+      return `${decodeURIComponent(k)}=${decodeURIComponent(v??"")}`;
+    }).join(",\n  ")+"\n}";
+  }
+
+  // --- Универсальная функция форматирования тела ---
+  function formatBody(text){
+    if(!text) return "";
+    text=text.trim();
+    if(text.startsWith('{')||text.startsWith('[')) return formatJSONText(text);
+    if(text.includes("=")&&text.includes("&")) return formatFormUrlEncoded(text);
+    if(text.includes("<") && text.includes(">")) return formatXML(text);
+    return text;
   }
 
   // --- Основная логика ---
@@ -130,20 +152,15 @@
             if(td && td.textContent.trim() && !noiseRe.test(td.textContent.trim()) && sel.containsNode(td,true)){
               let val=td.textContent.trim();
               if(key==="message.exception") val=val.split("\n")[0];
-              if(["payload","body"].includes(key)) val=formatBody(val);
+              if(["payload","body","message.message"].includes(key)) val=formatBody(val);
               return val;
             }
           }
           return null;
         }
 
-        const time=getCellText('time');
-        const message=getCellText('message.message');
-        const exception=getCellText('message.exception');
-        const payload=getCellText('payload');
-        const body=getCellText('body');
-
-        const parts=[time,message,exception,payload,body].filter(Boolean);
+        const keys=['time','message.message','message.exception','payload','body'];
+        const parts=keys.map(getCellText).filter(Boolean);
         if(parts.length>0) out.push(parts.join("  "));
       }
     });
