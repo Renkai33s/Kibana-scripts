@@ -34,15 +34,39 @@
   function showError(msg){ showMessage(msg,true,false); }
   function showSuccess(msg){ showMessage(msg,false,true); }
 
+  // --- Pretty print XML ---
+  function prettyPrintXML(xmlStr){
+    try {
+      const parser = new DOMParser();
+      const xmlDoc = parser.parseFromString(xmlStr, "application/xml");
+      const serializer = new XMLSerializer();
+      const xml = serializer.serializeToString(xmlDoc);
+
+      let formatted = '';
+      const reg = /(>)(<)(\/*)/g;
+      xml.replace(reg, '$1\r\n$2$3').split('\r\n').forEach((line)=>{
+        let indent = 0;
+        if(line.match(/<\/\w/)) indent -= 1;
+        formatted += '  '.repeat(Math.max(indent,0)) + line + '\r\n';
+        if(line.match(/<\w[^>]*[^\/]>.*$/)) indent += 1;
+      });
+      return formatted.trim();
+    } catch {
+      return xmlStr; // если не XML
+    }
+  }
+
   // --- Pretty print in-place ---
   function prettyPrintInPlace(str){
     if(!str) return str;
 
-    // --- JSON / URL-encoded ---
-    str = str.replace(/body=({.*?}|\[.*?\])/gs, (match, p1)=>{
-      try { return 'body=' + JSON.stringify(JSON.parse(p1), null, 2); } catch { return match; }
+    // JSON: body={"…"}
+    str = str.replace(/body=({[\s\S]*?})/g, (match, p1)=>{
+      try { return 'body=' + JSON.stringify(JSON.parse(p1), null, 2); }
+      catch { return match; }
     });
 
+    // URL-encoded: body=param1=…&param2=…
     str = str.replace(/body=([^\s]+)/g, (match, p1)=>{
       if(p1.includes('=') && p1.includes('&')){
         try {
@@ -54,16 +78,10 @@
       return match;
     });
 
-    // --- SOAP/XML messages ---
-    str = str.replace(/SOAP-(?:OUT|IN) message:\s*(<.+>)/gs, (match, p1)=>{
-      try {
-        const parser = new DOMParser();
-        const xmlDoc = parser.parseFromString(p1, "application/xml");
-        const serializer = new XMLSerializer();
-        // Добавляем переносы и отступы вручную
-        const pretty = vkbeautify.xml(serializer.serializeToString(xmlDoc));
-        return match.replace(p1, pretty);
-      } catch { return match; }
+    // SOAP/XML messages
+    str = str.replace(/(SOAP-(?:OUT|IN) message:\s*)(<.+>)/gs, (match, prefix, xml)=>{
+      const pretty = prettyPrintXML(xml);
+      return prefix + pretty;
     });
 
     return str;
