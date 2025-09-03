@@ -1,25 +1,12 @@
 (async () => {
   // =========================
-  // Логовый форматтер v3.2 — упрощённый под EUI/Kibana Discover
+  // Логовый форматтер v2
   // =========================
 
   const CFG = {
-    LIMIT: {
-      MAX_ROWS: 500,
-      MAX_FIELD_CHARS: 50_000,
-      MAX_JSON_SCAN: 80_000,
-      MAX_TOTAL_OUT: 500_000,
-    },
-    OUTPUT: {
-      HARD_INDENT: true,           // NBSP для ведущих пробелов
-      COL_SEP: '\u00A0\u00A0',     // два NBSP между столбцами
-      WRAP_MARKDOWN: false,
-    },
-    UI: {
-      Z: 999999,
-      COLORS: { success: '#52c41a', error: '#ff4d4f', warn: '#faad14', info: '#3498db' },
-      DURATION: 2000,
-    },
+    LIMIT: { MAX_ROWS: 500, MAX_FIELD_CHARS: 50_000, MAX_JSON_SCAN: 80_000, MAX_TOTAL_OUT: 500_000 },
+    OUTPUT: { HARD_INDENT: true, COL_SEP: '\u00A0\u00A0', WRAP_MARKDOWN: false },
+    UI: { Z: 999999, COLORS: { success: '#52c41a', error: '#ff4d4f', warn: '#faad14', info: '#3498db' }, DURATION: 2000 },
   };
 
   const TEXTS = {
@@ -32,12 +19,12 @@
 
   // ---------- Уведомления ----------
   function ensureNotif() {
-    if (window.__notifLogV32) return window.__notifLogV32;
+    if (window.__notifLogV32t) return window.__notifLogV32t;
     const box = document.createElement('div');
     Object.assign(box.style, { position: 'fixed', bottom: '20px', right: '20px', zIndex: String(CFG.UI.Z), display: 'flex', flexDirection: 'column', gap: '8px' });
     document.body.appendChild(box);
-    window.__notifLogV32 = { box, current: null, timer: null };
-    return window.__notifLogV32;
+    window.__notifLogV32t = { box, current: null, timer: null };
+    return window.__notifLogV32t;
   }
   function notify(text, type = 'info', ms = CFG.UI.DURATION) {
     const n = ensureNotif();
@@ -176,7 +163,7 @@
     return v.trim();
   }
 
-  // ---------- Выделение и контейнер ----------
+  // ---------- Выделение ----------
   try {
     const selection = window.getSelection();
     if (!selection || selection.rangeCount === 0 || !selection.toString().trim()) { err(TEXTS.not_selected); return; }
@@ -184,10 +171,8 @@
     const common = range.commonAncestorContainer.nodeType === 1
       ? range.commonAncestorContainer
       : range.commonAncestorContainer.parentElement;
-
-    // Предпочитаем EUI DataGrid; table — запасной путь
-    const grid = common?.closest?.('[role="grid"], [role="table"]') || null;
-    const table = grid ? null : (common?.closest?.('table') || null);
+    const table = common?.closest?.('table') || null;
+    if (!table) { err(TEXTS.no_fields); return; }
 
     // ---------- Индексы ----------
     function buildIdxMapFromHeaders(headers) {
@@ -198,13 +183,6 @@
         if (idx !== -1) idxMap.set(WANTED[order], idx);
       });
       return idxMap;
-    }
-    function getGridMap(gridEl) {
-      const headersEls = gridEl.querySelectorAll('[role="columnheader"]');
-      if (!headersEls.length) return null;
-      const headers = Array.from(headersEls).map(el => el.textContent || '');
-      const idxMap = buildIdxMapFromHeaders(headers);
-      return idxMap.size ? idxMap : null;
     }
     function getTableMap(tableEl) {
       const ths = tableEl.querySelectorAll('thead th, tr th');
@@ -233,28 +211,16 @@
       return res;
     }
 
-    let rows = [];
-    if (grid) {
-      const idxMap = getGridMap(grid);
-      if (idxMap) {
-        const allRows = Array.from(grid.querySelectorAll('[role="row"]'));
-        rows = extractFromRows(allRows, r => Array.from(r.querySelectorAll('[role="gridcell"], [role="cell"]')), idxMap);
-      }
-    }
-    if (!rows.length && table) {
-      const idxMap = getTableMap(table);
-      if (idxMap) {
-        const allRows = Array.from(table.querySelectorAll('tbody tr, tr'));
-        rows = extractFromRows(allRows, tr => Array.from(tr.querySelectorAll('td, th')), idxMap);
-      }
-    }
+    const idxMap = getTableMap(table);
+    if (!idxMap) { err(TEXTS.no_fields); return; }
+    const allRows = Array.from(table.querySelectorAll('tbody tr, tr'));
+    let rows = extractFromRows(allRows, tr => Array.from(tr.querySelectorAll('td, th')), idxMap);
 
     if (!rows.length) { err(TEXTS.no_fields); return; }
 
     const lines = rows
       .map(r => r.join(CFG.OUTPUT.COL_SEP).replace(/[ \t]+$/g, ''))
       .filter(line => line.trim() !== '');
-
     let out = protectLeadingSpaces(lines.join('\n'));
     if (out.length > CFG.LIMIT.MAX_TOTAL_OUT) out = out.slice(0, CFG.LIMIT.MAX_TOTAL_OUT) + '\n…';
     if (CFG.OUTPUT.WRAP_MARKDOWN) out = '```\n' + out + '\n```';
@@ -271,7 +237,7 @@
     const copied = await copy(out);
     if (copied) ok(TEXTS.copy_ok); else { console.log(out); err(TEXTS.copy_fail); }
   } catch (e) {
-    console.error('[Логовый форматтер v3.2] error:', e);
+    console.error('[Логовый форматтер v3.2 TABLE] error:', e);
     err(TEXTS.oops);
   }
 })();
