@@ -4,7 +4,12 @@
   // =========================
 
   const NS = '__traceHelperV3';
-  const state = (window[NS] ||= { timers: new Set(), progress: null, didScrollDown: false });
+  const state = (window[NS] ||= {
+    timers: new Set(),
+    progress: null,
+    didScrollDown: false,
+    stop: false,
+  });
 
   const CFG = {
     LIMIT: 20,
@@ -73,7 +78,12 @@
   const qs = (sel) => { try { return document.querySelector(sel); } catch { return null; } };
   function pickOne(cands) { for (const s of cands) { const el = qs(s); if (el) return el; } return null; }
   function parseIntSafe(t) { if (!t) return 0; const n = parseInt(String(t).replace(/[^0-9]/g, ''), 10); return Number.isFinite(n) ? n : 0; }
-  function sleep(ms) { return new Promise(r => { const t = setTimeout(r, ms); state.timers.add(t); }); }
+  function sleep(ms) {
+    return new Promise(r => {
+      const t = setTimeout(() => { state.timers.delete(t); r(); }, ms);
+      state.timers.add(t);
+    });
+  }
   function clearAllTimers() { for (const t of state.timers) clearTimeout(t); state.timers.clear(); }
   function scrollTop0() { const s = pickOne(CFG.SELECTORS.scrollable); if (s) s.scrollTop = 0; state.didScrollDown = false; }
   function isEditable(el) {
@@ -189,8 +199,8 @@
   async function insertAndRun(traces, { notifyLimitIfCut = false } = {}) {
     const uniq = Array.from(new Set(Array.isArray(traces) ? traces : []));
     if (uniq.length === 0) { err(TEXTS.notFoundTraces); return; }
-    let payload = uniq, cut = false;
-    if (uniq.length > CFG.LIMIT) { payload = uniq.slice(0, CFG.LIMIT); cut = true; }
+    let payload = uniq;
+    if (uniq.length > CFG.LIMIT) { payload = uniq.slice(0, CFG.LIMIT); }
     const value = '(' + payload.map(t => JSON.stringify(t)).join(' ') + ')';
     const input = getQueryInputEl();
     if (input) {
@@ -199,7 +209,7 @@
       await sleep(40);
       pressEnter(input);
     }
-    if (cut && notifyLimitIfCut) ok(TEXTS.limitHit(CFG.LIMIT)); else ok(TEXTS.tracesInserted);
+    if (notifyLimitIfCut && uniq.length >= CFG.LIMIT) ok(TEXTS.limitHit(CFG.LIMIT)); else ok(TEXTS.tracesInserted);
     if (state.didScrollDown) scrollTop0();
   }
 
@@ -207,17 +217,32 @@
   async function collectWithScroll(tableEl, traceIdx) {
     const scrollable = pickOne(CFG.SELECTORS.scrollable);
     if (!scrollable) { err(TEXTS.notFoundScrollable); return []; }
+
     const prog = showProgress();
+
+    state.stop = false;
+    prog.onStop(() => {
+      state.stop = true;
+      prog.remove();
+    });
+
     let last = -1, stable = 0;
     for (let i = 0; i < 600; i++) {
+      if (state.stop) {
+        return getTracesFromTable(tableEl, traceIdx);
+      }
+
       scrollable.scrollTop = scrollable.scrollHeight;
       state.didScrollDown = true;
+
       const traces = getTracesFromTable(tableEl, traceIdx);
       prog.update(traces.length);
       if (traces.length >= CFG.LIMIT) { prog.remove(); return traces; }
+
       const rc = tableEl ? tableEl.querySelectorAll('tbody tr').length : 0;
       if (rc !== last) { last = rc; stable = 0; } else { stable++; }
       if (stable >= 10) { prog.remove(); return traces; }
+
       await sleep(100);
     }
     prog.remove();
