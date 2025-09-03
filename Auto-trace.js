@@ -1,6 +1,6 @@
 (async () => {
   // =========================
-  // Помощник трейсов v3 — упрощённый (только рабочие пути)
+  // Помощник трейсов v2
   // =========================
 
   const NS = '__traceHelperV3';
@@ -139,7 +139,6 @@
     try {
       el.click?.(); el.focus?.();
       setNativeValue(el, value);
-      // этого хватает, чтобы React/EUI подхватил изменение
       el.dispatchEvent(new Event('input', { bubbles: true }));
       el.dispatchEvent(new Event('change', { bubbles: true }));
       return ('value' in el ? String(el.value) === String(value) : false);
