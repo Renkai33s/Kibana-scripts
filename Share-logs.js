@@ -1,4 +1,4 @@
-javascript:(function(){
+(function(){
     // --- Система уведомлений ---
     if (!window.__notifContainer) {
         const container = document.createElement("div");
