@@ -1,13 +1,8 @@
 (async () => {
   // =========================
-  // Логовый форматтер v3.1 — фиксы под ваши замечания
+  // Логовый форматтер v3.2 — упрощённый под EUI/Kibana Discover
   // =========================
-  // Изменения:
-  // 1) Тексты успехов/ошибок вынесены в один объект TEXTS.
-  // 2) Фиксированный набор колонок и порядок: Time, message.message, message.exception, Payload.
-  // 3) Красивый парсинг JSON и SOAP/XML (встроенные фрагменты тоже).
 
-  // ---------- Конфиг ----------
   const CFG = {
     LIMIT: {
       MAX_ROWS: 500,
@@ -37,12 +32,12 @@
 
   // ---------- Уведомления ----------
   function ensureNotif() {
-    if (window.__notifLogV3) return window.__notifLogV3;
+    if (window.__notifLogV32) return window.__notifLogV32;
     const box = document.createElement('div');
     Object.assign(box.style, { position: 'fixed', bottom: '20px', right: '20px', zIndex: String(CFG.UI.Z), display: 'flex', flexDirection: 'column', gap: '8px' });
     document.body.appendChild(box);
-    window.__notifLogV3 = { box, current: null, timer: null };
-    return window.__notifLogV3;
+    window.__notifLogV32 = { box, current: null, timer: null };
+    return window.__notifLogV32;
   }
   function notify(text, type = 'info', ms = CFG.UI.DURATION) {
     const n = ensureNotif();
@@ -63,7 +58,7 @@
   const ok = (m) => notify(m, 'success');
   const err = (m) => notify(m, 'error');
 
-  // ---------- Утилиты текста ----------
+  // ---------- Текст/нормализация ----------
   const NBSP = '\u00A0';
   const norm = (s) => (s ?? '').trim().replace(/\s+/g, ' ').toLowerCase();
   const isEmptyToken = (v) => {
@@ -72,11 +67,11 @@
   };
   const protectLeadingSpaces = (s) => CFG.OUTPUT.HARD_INDENT ? s.replace(/^ +/gm, (m) => NBSP.repeat(m.length)) : s;
 
-  // ---------- Фиксированные колонки ----------
+  // ---------- Колонки ----------
   const WANTED = ['Time', 'message.message', 'message.exception', 'Payload'];
   const WANTED_NORM = WANTED.map(norm);
 
-  // ---------- Prettify JSON/XML ----------
+  // ---------- JSON/XML prettify ----------
   const tryJSON = (s) => { try { return JSON.parse(s); } catch { return null; } };
   function prettyWholeJson(text) {
     if (!text) return null;
@@ -150,7 +145,6 @@
     const normed = parseXmlSafe(text.trim());
     return normed ? indentXml(normed) : null;
   }
-  // Встроенный XML внутри строки.
   function prettyXmlEmbedded(text) {
     if (!text) return null;
     const maxScan = CFG.LIMIT.MAX_FIELD_CHARS;
@@ -182,103 +176,102 @@
     return v.trim();
   }
 
-  // ---------- Поиск ближайшего контейнера ----------
-  const selection = window.getSelection();
-  if (!selection || selection.rangeCount === 0 || !selection.toString().trim()) { err(TEXTS.not_selected); return; }
-  const range = selection.getRangeAt(0);
-  const common = range.commonAncestorContainer.nodeType === 1 ? range.commonAncestorContainer : range.commonAncestorContainer.parentElement;
-  const nearestTable = common?.closest?.('table') || common?.querySelector?.('table') || document.querySelector('table');
-  const nearestGrid = common?.closest?.('[role="grid"], [role="table"]') || common?.querySelector?.('[role="grid"], [role="table"]');
+  // ---------- Выделение и контейнер ----------
+  try {
+    const selection = window.getSelection();
+    if (!selection || selection.rangeCount === 0 || !selection.toString().trim()) { err(TEXTS.not_selected); return; }
+    const range = selection.getRangeAt(0);
+    const common = range.commonAncestorContainer.nodeType === 1
+      ? range.commonAncestorContainer
+      : range.commonAncestorContainer.parentElement;
 
-  // ---------- Построение индексов ----------
-  function buildIdxMapFromHeaders(headers) {
-    const idxMap = new Map();
-    const headersNorm = headers.map(norm);
-    WANTED_NORM.forEach((wn, order) => {
-      const idx = headersNorm.indexOf(wn);
-      if (idx !== -1) idxMap.set(WANTED[order], idx);
-    });
-    return { idxMap, headers };
-  }
-  function buildIdxMapFromTable(tableEl) {
-    const ths = tableEl.querySelectorAll('thead th, tr th');
-    if (!ths.length) return null;
-    const headers = Array.from(ths).map(th => th.textContent || '');
-    return buildIdxMapFromHeaders(headers);
-  }
-  function buildIdxMapFromGrid(gridEl) {
-    const headersEls = gridEl.querySelectorAll('[role="columnheader"]');
-    if (!headersEls.length) return null;
-    const headers = Array.from(headersEls).map(el => el.textContent || '');
-    return buildIdxMapFromHeaders(headers);
-  }
+    // Предпочитаем EUI DataGrid; table — запасной путь
+    const grid = common?.closest?.('[role="grid"], [role="table"]') || null;
+    const table = grid ? null : (common?.closest?.('table') || null);
 
-  // ---------- Извлечение строк ----------
-  function extractFromRows(rows, getCells, idxMap) {
-    const res = [];
-    for (const row of rows.slice(0, CFG.LIMIT.MAX_ROWS)) {
-      const cells = getCells(row);
-      const vals = [];
-      for (const wantedName of WANTED) {
-        const colIdx = idxMap.get(wantedName);
-        if (colIdx == null) continue;
-        const raw = cells[colIdx]?.innerText ?? '';
-        const val = prettyValue(String(raw).slice(0, CFG.LIMIT.MAX_FIELD_CHARS), wantedName);
-        if (!isEmptyToken(val)) vals.push(val);
+    // ---------- Индексы ----------
+    function buildIdxMapFromHeaders(headers) {
+      const idxMap = new Map();
+      const headersNorm = headers.map(norm);
+      WANTED_NORM.forEach((wn, order) => {
+        const idx = headersNorm.indexOf(wn);
+        if (idx !== -1) idxMap.set(WANTED[order], idx);
+      });
+      return idxMap;
+    }
+    function getGridMap(gridEl) {
+      const headersEls = gridEl.querySelectorAll('[role="columnheader"]');
+      if (!headersEls.length) return null;
+      const headers = Array.from(headersEls).map(el => el.textContent || '');
+      const idxMap = buildIdxMapFromHeaders(headers);
+      return idxMap.size ? idxMap : null;
+    }
+    function getTableMap(tableEl) {
+      const ths = tableEl.querySelectorAll('thead th, tr th');
+      if (!ths.length) return null;
+      const headers = Array.from(ths).map(th => th.textContent || '');
+      const idxMap = buildIdxMapFromHeaders(headers);
+      return idxMap.size ? idxMap : null;
+    }
+
+    // ---------- Извлечение ----------
+    function extractFromRows(rows, getCells, idxMap) {
+      const res = [];
+      for (const row of rows.slice(0, CFG.LIMIT.MAX_ROWS)) {
+        if (!selection.containsNode(row, true)) continue;
+        const cells = getCells(row);
+        const vals = [];
+        for (const wantedName of WANTED) {
+          const colIdx = idxMap.get(wantedName);
+          if (colIdx == null) continue;
+          const raw = cells[colIdx]?.innerText ?? '';
+          const val = prettyValue(String(raw).slice(0, CFG.LIMIT.MAX_FIELD_CHARS), wantedName);
+          if (!isEmptyToken(val)) vals.push(val);
+        }
+        if (vals.length) res.push(vals);
       }
-      if (vals.length) res.push(vals);
+      return res;
     }
-    return res;
-  }
 
-  // ---------- Основной поток ----------
-  let rows = [];
-  if (nearestTable) {
-    const m = buildIdxMapFromTable(nearestTable);
-    if (m?.idxMap?.size) {
-      rows = extractFromRows(
-        Array.from(nearestTable.querySelectorAll('tbody tr, tr')).filter(tr => selection.containsNode(tr, true)),
-        (tr) => Array.from(tr.querySelectorAll('td, th')),
-        m.idxMap
-      );
-    }
-  }
-  if (!rows.length && nearestGrid) {
-    const m = buildIdxMapFromGrid(nearestGrid);
-    if (m?.idxMap?.size) {
-      rows = extractFromRows(
-        Array.from(nearestGrid.querySelectorAll('[role="row"]')).filter(r => selection.containsNode(r, true)),
-        (r) => Array.from(r.querySelectorAll('[role="gridcell"], [role="cell"]')),
-        m.idxMap
-      );
-    }
-  }
-  if (!rows.length && nearestTable) {
-    const anchorTr = selection.anchorNode?.parentElement?.closest?.('tr');
-    if (anchorTr) {
-      const m = buildIdxMapFromTable(nearestTable);
-      if (m?.idxMap?.size) {
-        rows = extractFromRows([anchorTr], (tr) => Array.from(tr.querySelectorAll('td, th')), m.idxMap);
+    let rows = [];
+    if (grid) {
+      const idxMap = getGridMap(grid);
+      if (idxMap) {
+        const allRows = Array.from(grid.querySelectorAll('[role="row"]'));
+        rows = extractFromRows(allRows, r => Array.from(r.querySelectorAll('[role="gridcell"], [role="cell"]')), idxMap);
       }
     }
+    if (!rows.length && table) {
+      const idxMap = getTableMap(table);
+      if (idxMap) {
+        const allRows = Array.from(table.querySelectorAll('tbody tr, tr'));
+        rows = extractFromRows(allRows, tr => Array.from(tr.querySelectorAll('td, th')), idxMap);
+      }
+    }
+
+    if (!rows.length) { err(TEXTS.no_fields); return; }
+
+    const lines = rows
+      .map(r => r.join(CFG.OUTPUT.COL_SEP).replace(/[ \t]+$/g, ''))
+      .filter(line => line.trim() !== '');
+
+    let out = protectLeadingSpaces(lines.join('\n'));
+    if (out.length > CFG.LIMIT.MAX_TOTAL_OUT) out = out.slice(0, CFG.LIMIT.MAX_TOTAL_OUT) + '\n…';
+    if (CFG.OUTPUT.WRAP_MARKDOWN) out = '```\n' + out + '\n```';
+
+    // ---------- Копирование ----------
+    async function copy(text) {
+      try {
+        if (navigator.clipboard && window.isSecureContext) { await navigator.clipboard.writeText(text); return true; }
+        const ta = document.createElement('textarea'); ta.value = text; ta.style.position = 'fixed'; ta.style.top = '-1000px';
+        document.body.appendChild(ta); ta.focus(); ta.select(); const ok = document.execCommand('copy'); document.body.removeChild(ta); return ok;
+      } catch { return false; }
+    }
+
+    const copied = await copy(out);
+    if (copied) ok(TEXTS.copy_ok); else { console.log(out); err(TEXTS.copy_fail); }
+  } catch (e) {
+    console.error('[Логовый форматтер v3.2] error:', e);
+    err(TEXTS.oops);
   }
-
-  if (!rows.length) { err(TEXTS.no_fields); return; }
-
-  const lines = rows.map(r => r.join(CFG.OUTPUT.COL_SEP).replace(/[ \t]+$/g, '')).filter(line => line.trim() !== '');
-  let out = protectLeadingSpaces(lines.join('\n'));
-  if (out.length > CFG.LIMIT.MAX_TOTAL_OUT) out = out.slice(0, CFG.LIMIT.MAX_TOTAL_OUT) + '\n…';
-  if (CFG.OUTPUT.WRAP_MARKDOWN) out = '```\n' + out + '\n```';
-
-  // ---------- Копирование ----------
-  async function copy(text) {
-    try {
-      if (navigator.clipboard && window.isSecureContext) { await navigator.clipboard.writeText(text); return true; }
-      const ta = document.createElement('textarea'); ta.value = text; ta.style.position = 'fixed'; ta.style.top = '-1000px';
-      document.body.appendChild(ta); ta.focus(); ta.select(); const ok = document.execCommand('copy'); document.body.removeChild(ta); return ok;
-    } catch { return false; }
-  }
-
-  const copied = await copy(out);
-  if (copied) ok(TEXTS.copy_ok); else { console.log(out); err(TEXTS.copy_fail); }
 })();
