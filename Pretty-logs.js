@@ -35,7 +35,13 @@
   // --- утилиты ---
   const wanted = ["time","message.message","message.exception","payload"];
   const norm = s => s?.trim().replace(/\s+/g," ").toLowerCase();
-  const SEP = "  "; // два пробела между столбцами
+
+  const NBSP = "\u00A0";
+  const HARD_INDENT = true;  // жёсткие отступы включены
+  const SEP = NBSP + NBSP;   // два NBSP между столбцами
+
+  const protectLeadingSpaces = (s) =>
+    HARD_INDENT ? s.replace(/^ +/gm, m => NBSP.repeat(m.length)) : s;
 
   const isEmptyToken = v => {
     const t = (v ?? "").toString().trim().toLowerCase();
@@ -48,6 +54,8 @@
     const obj = tryParseJson(text.trim());
     return obj != null ? JSON.stringify(obj, null, 2) : null;
   };
+
+  // Любые сбалансированные JSON-фрагменты внутри текста, с переносом перед "{"
   const prettyAnyJsonFragments = (text) => {
     let s = text, out = "", i = 0, changed = false;
     while (i < s.length) {
@@ -61,11 +69,19 @@
         else { if (c === '"') inStr = true; else if (c === open) depth++; else if (c === close) { depth--; if (depth === 0) break; } }
       }
       if (depth !== 0) { out += s[i++]; continue; }
+
       const candidate = s.slice(i, j + 1);
       if (open === "[" && !/[{\[]/.test(candidate)) { out += candidate; i = j + 1; continue; }
+
       const obj = tryParseJson(candidate);
-      if (obj != null) { out += "\n" + JSON.stringify(obj, null, 2); changed = true; }
-      else { out += candidate; }
+      if (obj != null) {
+        const pretty = JSON.stringify(obj, null, 2);
+        out = out.replace(/[ \t]+$/,'');  // убрать хвостовые пробелы перед переносом
+        out += "\n" + pretty;
+        changed = true;
+      } else {
+        out += candidate;
+      }
       i = j + 1;
     }
     return changed ? out : null;
@@ -88,11 +104,11 @@
     let indent = 0; const out = [];
     for (const line of lines) {
       const isClose = /^<\/[^>]+>/.test(line);
-      const isSelf  = /\/>$/.test(line) || /^<[^>]+\/>$/.test(line);
+      const isSelf  = /\/>$/.test(line) || /^<[^>]+\/>$/.test(line); // ← FIX: закрыта скобка
       const isDecl  = /^<\?xml/.test(line);
       const isCmnt  = /^<!--/.test(line) && /-->$/.test(line);
       if (isClose) indent = Math.max(indent - 1, 0);
-      out.push('  '.repeat(indent) + line);
+      out.push('  '.repeat(indent) + line); // 2 пробела — потом превратим в NBSP
       if (!isClose && !isSelf && !isDecl && !isCmnt && /^<[^!?][^>]*>$/.test(line)) indent++;
     }
     return out.join('\n');
@@ -108,13 +124,21 @@
     return (before ? before + "\n" : "") + pretty + (after ? "\n" + after : "");
   };
 
-  const prettyValue = (raw) => {
+  // Единый форматтер значения
+  const prettyValue = (raw, colName) => {
     let v = (raw ?? "").toString();
+
+    if (norm(colName) === "message.exception") {
+      v = (v.split(/\r?\n/)[0] || "").trim(); // только первая строка
+    }
+
     if (isEmptyToken(v)) return "";
+
     const wj = prettyWholeJson(v); if (wj !== null) return wj.trim();
     const jf = prettyAnyJsonFragments(v); if (jf !== null) return jf.trim();
     const wx = parseXml(v.trim()); if (wx) return indentXml(wx).trim();
     const fx = prettyXmlInText(v); if (fx !== null) return fx.trim();
+
     return v.trim();
   };
 
@@ -143,11 +167,8 @@
       const tds = Array.from(tr.querySelectorAll("td, th"));
       const vals = wanted.map(w => {
         const i = idxMap.get(norm(w));
-        let raw = (i != null && tds[i]) ? tds[i].innerText : "";
-        if (w === "message.exception") {           // 👈 берём только первую строку
-          raw = (raw.split(/\r?\n/)[0] || "").trim();
-        }
-        return prettyValue(raw);
+        const raw = (i != null && tds[i]) ? tds[i].innerText : "";
+        return prettyValue(raw, w);
       });
       return vals.filter(v => v !== ""); // выбрасываем пустые поля целиком
     });
@@ -175,11 +196,8 @@
             const cells = Array.from(r.querySelectorAll('[role="gridcell"], [role="cell"]'));
             const vals = wanted.map(w => {
               const i = idxMap.get(norm(w));
-              let raw = (i != null && cells[i]) ? cells[i].innerText : "";
-              if (w === "message.exception") {     // 👈 берём только первую строку
-                raw = (raw.split(/\r?\n/)[0] || "").trim();
-              }
-              return prettyValue(raw);
+              const raw = (i != null && cells[i]) ? cells[i].innerText : "";
+              return prettyValue(raw, w);
             });
             return vals.filter(v => v !== "");
           });
@@ -197,11 +215,12 @@
 
   if (!rows.length) { showError("Нет подходящих филдов"); return; }
 
-  // формируем строки
+  // формируем строки и «жёстко» защищаем ведущие пробелы NBSP
   const lines = rows
     .map(r => r.join(SEP).replace(/[ \t]+$/g, ""))
     .filter(line => line.trim() !== "");
   const result = lines.join("\n");
+  const hardened = protectLeadingSpaces(result);
 
   const copy = async text => {
     try {
@@ -213,7 +232,7 @@
     } catch { return false; }
   };
 
-  const ok = await copy(result);
+  const ok = await copy(hardened);
   if (ok) showSuccess("Логи скопированы");
-  else { console.log(result); showError("Что-то пошло не так"); }
+  else { console.log(hardened); showError("Что-то пошло не так"); }
 })();
