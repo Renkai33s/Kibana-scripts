@@ -35,7 +35,7 @@
   // --- утилиты ---
   const wanted = ["time","message.message","message.exception","payload"];
   const norm = s => s?.trim().replace(/\s+/g," ").toLowerCase();
-  const SEP = "  "; // <-- два пробела между столбцами
+  const SEP = "  "; // два пробела между столбцами
 
   const isEmptyToken = v => {
     const t = (v ?? "").toString().trim().toLowerCase();
@@ -143,7 +143,10 @@
       const tds = Array.from(tr.querySelectorAll("td, th"));
       const vals = wanted.map(w => {
         const i = idxMap.get(norm(w));
-        const raw = (i != null && tds[i]) ? tds[i].innerText : "";
+        let raw = (i != null && tds[i]) ? tds[i].innerText : "";
+        if (w === "message.exception") {           // 👈 берём только первую строку
+          raw = (raw.split(/\r?\n/)[0] || "").trim();
+        }
         return prettyValue(raw);
       });
       return vals.filter(v => v !== ""); // выбрасываем пустые поля целиком
@@ -172,7 +175,10 @@
             const cells = Array.from(r.querySelectorAll('[role="gridcell"], [role="cell"]'));
             const vals = wanted.map(w => {
               const i = idxMap.get(norm(w));
-              const raw = (i != null && cells[i]) ? cells[i].innerText : "";
+              let raw = (i != null && cells[i]) ? cells[i].innerText : "";
+              if (w === "message.exception") {     // 👈 берём только первую строку
+                raw = (raw.split(/\r?\n/)[0] || "").trim();
+              }
               return prettyValue(raw);
             });
             return vals.filter(v => v !== "");
@@ -191,7 +197,7 @@
 
   if (!rows.length) { showError("Нет подходящих филдов"); return; }
 
-  // формируем строки: разделитель — два пробела; без хвостовых пробелов
+  // формируем строки
   const lines = rows
     .map(r => r.join(SEP).replace(/[ \t]+$/g, ""))
     .filter(line => line.trim() !== "");
