@@ -120,7 +120,7 @@
 
   // --- извлечение из таблицы ---
   const sel = window.getSelection();
-  if (!sel || sel.rangeCount === 0 || !sel.toString().trim()) { showError("Ничего не выделено"); return; }
+  if (!sel || sel.rangeCount === 0 || !sel.toString().trim()) { showError("Логи не выделены"); return; }
 
   const allTr = Array.from(document.querySelectorAll("tr"));
   const selectedTr = allTr.filter(tr => sel.containsNode(tr, true));
@@ -189,7 +189,7 @@
     if (fbTable && buildIdxMapFromTable(fbTable)) rows = extractFromTable(fbTable, [anchorTr]);
   }
 
-  if (!rows.length) { showError("Не обнаружены подходящие филды"); return; }
+  if (!rows.length) { showError("Нет подходящих филдов"); return; }
 
   // формируем строки: разделитель — два пробела; без хвостовых пробелов
   const lines = rows
@@ -208,6 +208,6 @@
   };
 
   const ok = await copy(result);
-  if (ok) showSuccess(`Логи скопированы (строк: ${lines.length})`);
+  if (ok) showSuccess("Логи скопированы");
   else { console.log(result); showError("Что-то пошло не так"); }
 })();
