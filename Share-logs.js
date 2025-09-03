@@ -1,6 +1,6 @@
 (async () => {
   // =========================
-  // Share Short URL Helper v2 — упрощённый и надёжный
+  // Share-logs v2
   // =========================
 
   const NS = '__shareShortHelperV2';
@@ -101,14 +101,8 @@
   try {
     // 1) Находим Share
     function findShareButton() {
-      // приоритет — стабильный data-test-subj
       const bySubj = qs('[data-test-subj="shareTopNavButton"]');
       if (isVisible(bySubj)) return bySubj;
-      // фолбэк по видимому тексту
-      for (const b of qsa('button,[role="button"],a')) {
-        const t = (b.textContent || '').trim();
-        if (t === 'Share' && isVisible(b)) return b;
-      }
       return null;
     }
     const shareBtn = findShareButton();
@@ -133,15 +127,8 @@
       return (btn && isVisible(btn)) ? btn : null;
     }
     function findCopyButton(root) {
-      // сначала — по data-test-subj (если присутствует в вашей версии)
       const bySubj = qs('button[data-test-subj*="copy"]', root) || qs('[data-test-subj*="copy"]', root);
       if (bySubj && isVisible(bySubj)) return bySubj;
-      // затем — по видимому тексту
-      const candidates = qsa('button,[role="button"],a', root);
-      for (const n of candidates) {
-        const t = (n.textContent || '').trim();
-        if (t === 'Copy link' && isVisible(n)) return n;
-      }
       return null;
     }
     function getUrlFromPanel(root) {
@@ -151,7 +138,7 @@
       return v.startsWith('http') ? v : '';
     }
 
-    // 3) Включаем Short URL (если опция включена)
+    // 3) Включаем Short URL (если опция выключена)
     async function enableShortIfPossible(root) {
       if (!CFG.FEATURES.TRY_ENABLE_SHORT) return true;
       const btn = findShortToggle(root);
@@ -172,13 +159,6 @@
       try {
         if (navigator.clipboard && window.isSecureContext) { await navigator.clipboard.writeText(text); return true; }
       } catch {}
-      try {
-        const ta = document.createElement('textarea');
-        ta.value = text; ta.style.position = 'fixed'; ta.style.top = '-1000px';
-        document.body.appendChild(ta); ta.focus(); ta.select();
-        const ok = document.execCommand('copy'); document.body.removeChild(ta);
-        return !!ok;
-      } catch { return false; }
     }
 
     let copied = false;
