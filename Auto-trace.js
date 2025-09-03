@@ -17,19 +17,10 @@
       scrollable: ['.dscCanvas'],
       count: ['[data-test-subj="discoverQueryHits"]'],
       table: ['[data-test-subj="docTable"]'],
-      // в Discover это <input/> или <textarea/> с data-test-subj="queryInput"
-      textarea: [
-        'input[data-test-subj="queryInput"]',
-        'textarea[data-test-subj="queryInput"]',
-        '[data-test-subj="queryInput"] input[type="search"]',
-        '[data-test-subj="queryInput"] input[type="text"]',
-      ],
+      textarea: ['textarea[data-test-subj="queryInput"]'],
       tracesBtn: ['[data-test-subj="field-message.traceid-showDetails"]'],
       popover: ['.dscSidebarItem__fieldPopoverPanel'],
-      // достаточно одной надежной выборки из контейнера
-      popoverTraceItems: [
-        '[data-test-subj="fieldVisualizeBucketContainer"] .euiText[title]'
-      ],
+      popoverTraceItems: ['[data-test-subj="fieldVisualizeBucketContainer"] .euiText[title]'],
     },
   };
 
