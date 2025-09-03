@@ -5,7 +5,7 @@
   // =========================
 
   // ---------- Namespace/State ----------
-  const NS = "__shareShortHelperV1";
+  const NS = '__shareShortHelperV1';
   const state = (window[NS] ||= { timers: new Set(), running: false });
 
   // ---------- Конфиг ----------
@@ -21,7 +21,7 @@
       TRY_ENABLE_SHORT: true,   // пробовать включать Short URL
       TRY_COPY_DIRECT: true,    // попытка скопировать URL прямо из поля
       CLOSE_BEHAVIOR: 'escape', // 'none' | 'escape' | 'toggle'
-    }
+    },
   };
 
   const TEXTS = {
@@ -74,18 +74,17 @@
     });
     d.addEventListener('click', () => { if (n.timer) clearTimeout(n.timer); d.remove(); n.current = null; n.timer = null; });
     n.box.appendChild(d); n.current = d;
-    n.timer = setTimeout(() => { if (n.current === d) { d.remove(); n.current = null; } n.timer = null; }, Math.max(300, ms|0));
+    n.timer = setTimeout(() => { if (n.current === d) { d.remove(); n.current = null; } n.timer = null; }, Math.max(300, ms | 0));
   }
-  const ok   = (m) => notify(m, 'success');
-  const err  = (m) => notify(m, 'error');
+  const ok = (m) => notify(m, 'success');
+  const err = (m) => notify(m, 'error');
   const warn = (m) => notify(m, 'warn');
   const info = (m) => notify(m, 'info');
 
   // ---------- Утилиты ----------
   const sleep = (ms) => new Promise(r => { const t = setTimeout(r, ms); state.timers.add(t); });
   function clearAllTimers() { for (const t of state.timers) clearTimeout(t); state.timers.clear(); }
-
-  function qs(sel)  { try { return document.querySelector(sel); } catch { return null; } }
+  function qs(sel) { try { return document.querySelector(sel); } catch { return null; } }
   function qsa(sel) { try { return Array.from(document.querySelectorAll(sel)); } catch { return []; } }
   function isVisible(el) { return !!(el && el.offsetParent !== null); }
   function clickSafe(el) {
@@ -120,19 +119,19 @@
     return null;
   }
 
-  // ---------- Чистка savedSearch БЕЗ перезагрузки (как в исходном скрипте) ----------
+  // ---------- Чистка savedSearch БЕЗ перезагрузки ----------
   (function cleanSavedSearchInPlace() {
     try {
       const url = window.location.href;
-      const cleanUrl = url.replace(/,savedSearch:'[^']*'/, ''); // один раз, без флага g — в точности как было
+      const cleanUrl = url.replace(/,savedSearch:'[^']*'/, ''); // как в исходном скрипте (без флага g)
       if (cleanUrl !== url) {
         history.replaceState(null, '', cleanUrl);
-        info(TEXTS.url_cleaned); // синий, как в исходном showMessage
+        info(TEXTS.url_cleaned);
       }
     } catch {}
   })();
 
-  if (state.running) return; // защита от двойного запуска
+  if (state.running) return;
   state.running = true;
 
   // ---------- Основной поток ----------
@@ -140,10 +139,8 @@
     const shareBtn = findShareButton();
     if (!shareBtn) { err(TEXTS.share_not_found); return; }
 
-    // Открыть панель Share
     clickSafe(shareBtn);
 
-    // Дождаться ключевых элементов панели
     const waitForPanelHints = async (timeoutMs = CFG.TIMEOUT) => {
       const t0 = Date.now();
       while (Date.now() - t0 < timeoutMs) {
@@ -158,7 +155,6 @@
     const { shortBtn, copyNode } = await waitForPanelHints();
     if (!shortBtn && !copyNode) { err(TEXTS.panel_not_ready); return; }
 
-    // Включить Short URL (если есть)
     async function enableShortIfPossible(btn) {
       if (!CFG.FEATURES.TRY_ENABLE_SHORT) return true;
       if (!btn || !isVisible(btn)) { warn(TEXTS.short_not_found); return false; }
@@ -173,7 +169,6 @@
     }
     await enableShortIfPossible(shortBtn);
 
-    // Копирование
     function getUrlFromPanel() {
       const inp = qs('input[value^="http"]') || qs('textarea[value^="http"]');
       if (!inp || !isVisible(inp)) return '';
@@ -208,14 +203,12 @@
       ok(TEXTS.copied_button);
     }
 
-    // Мягкое закрытие
     if (CFG.FEATURES.CLOSE_BEHAVIOR === 'escape') {
       document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', keyCode: 27, which: 27, bubbles: true }));
     } else if (CFG.FEATURES.CLOSE_BEHAVIOR === 'toggle') {
       clickSafe(shareBtn);
     }
 
-    // «Готово» — ЗЕЛЁНОЕ
     ok(TEXTS.done);
   } catch (e) {
     console.error('[Share Short URL Helper] error:', e);
