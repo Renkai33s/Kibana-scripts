@@ -1,14 +1,11 @@
 (async () => {
   // =========================
-  // Помощник трейсов v2 — только CSS-селекторы Kibana/EUI (без XPath)
+  // Помощник трейсов v3 — упрощённый (только рабочие пути)
   // =========================
-  // Поведение поповера: если значений ≤ 4 — подставляем их; если > 4 — скроллим таблицу
 
-  // ---------- Namespace/State ----------
-  const NS = '__traceHelperV2';
+  const NS = '__traceHelperV3';
   const state = (window[NS] ||= { timers: new Set(), progress: null, didScrollDown: false });
 
-  // ---------- Конфиг ----------
   const CFG = {
     LIMIT: 20,
     UI: {
@@ -20,12 +17,18 @@
       scrollable: ['.dscCanvas'],
       count: ['[data-test-subj="discoverQueryHits"]'],
       table: ['[data-test-subj="docTable"]'],
-      textarea: ['[data-test-subj="queryInput"]'],
+      // в Discover это <input/> или <textarea/> с data-test-subj="queryInput"
+      textarea: [
+        'input[data-test-subj="queryInput"]',
+        'textarea[data-test-subj="queryInput"]',
+        '[data-test-subj="queryInput"] input[type="search"]',
+        '[data-test-subj="queryInput"] input[type="text"]',
+      ],
       tracesBtn: ['[data-test-subj="field-message.traceid-showDetails"]'],
       popover: ['.dscSidebarItem__fieldPopoverPanel'],
+      // достаточно одной надежной выборки из контейнера
       popoverTraceItems: [
-        '[data-test-subj="fieldVisualizeBucketContainer"] .euiText[title]',
-        '.euiText.euiText--extraSmall.eui-textTruncate',
+        '[data-test-subj="fieldVisualizeBucketContainer"] .euiText[title]'
       ],
     },
   };
@@ -43,41 +46,28 @@
 
   // ---------- Уведомления ----------
   function ensureNotif() {
-    if (window.__notifTraceV2) return window.__notifTraceV2;
+    if (window.__notifTraceV3) return window.__notifTraceV3;
     const box = document.createElement('div');
     Object.assign(box.style, {
-      position: 'fixed',
-      bottom: '20px',
-      right: '20px',
-      zIndex: String(CFG.UI.Z),
-      display: 'flex',
-      flexDirection: 'column',
-      gap: '8px',
+      position: 'fixed', bottom: '20px', right: '20px', zIndex: String(CFG.UI.Z),
+      display: 'flex', flexDirection: 'column', gap: '8px',
     });
     document.body.appendChild(box);
-    window.__notifTraceV2 = { box, current: null, timer: null };
-    return window.__notifTraceV2;
+    window.__notifTraceV3 = { box, current: null, timer: null };
+    return window.__notifTraceV3;
   }
   function notify(text, type = 'info', ms = CFG.UI.DURATION) {
     const n = ensureNotif();
     if (n.timer) { clearTimeout(n.timer); n.timer = null; }
     if (n.current) { n.current.remove(); n.current = null; }
     const d = document.createElement('div');
-    d.setAttribute('role', 'status');
-    d.setAttribute('aria-live', 'polite');
+    d.setAttribute('role', 'status'); d.setAttribute('aria-live', 'polite');
     d.textContent = text;
     Object.assign(d.style, {
-      padding: '10px 14px',
-      borderRadius: '8px',
-      background: CFG.UI.COLORS[type] || CFG.UI.COLORS.info,
-      color: 'white',
-      fontFamily: 'system-ui, sans-serif',
-      fontSize: '14px',
-      minWidth: '160px',
-      textAlign: 'center',
-      boxShadow: '0 2px 6px rgba(0,0,0,0.2)',
-      userSelect: 'none',
-      cursor: 'pointer',
+      padding: '10px 14px', borderRadius: '8px',
+      background: CFG.UI.COLORS[type] || CFG.UI.COLORS.info, color: 'white',
+      fontFamily: 'system-ui, sans-serif', fontSize: '14px', minWidth: '160px',
+      textAlign: 'center', boxShadow: '0 2px 6px rgba(0,0,0,0.2)', userSelect: 'none', cursor: 'pointer',
     });
     d.addEventListener('click', () => { if (n.timer) clearTimeout(n.timer); d.remove(); n.current = null; n.timer = null; });
     n.box.appendChild(d); n.current = d;
@@ -89,7 +79,7 @@
   const info = (m) => notify(m, 'info');
 
   // ---------- Утилиты ----------
-  function qs(sel) { try { return document.querySelector(sel); } catch { return null; } }
+  const qs = (sel) => { try { return document.querySelector(sel); } catch { return null; } };
   function pickOne(cands) { for (const s of cands) { const el = qs(s); if (el) return el; } return null; }
   function parseIntSafe(t) { if (!t) return 0; const n = parseInt(String(t).replace(/[^0-9]/g, ''), 10); return Number.isFinite(n) ? n : 0; }
   function sleep(ms) { return new Promise(r => { const t = setTimeout(r, ms); state.timers.add(t); }); }
@@ -98,7 +88,6 @@
   function isEditable(el) {
     if (!el) return false;
     const tag = el.tagName?.toLowerCase();
-    if (el.isContentEditable) return true;
     if (tag === 'textarea') return true;
     if (tag === 'input') {
       const t = (el.type || '').toLowerCase();
@@ -112,19 +101,10 @@
     if (state.progress) state.progress.remove?.();
     const box = document.createElement('div');
     Object.assign(box.style, {
-      position: 'fixed',
-      bottom: '20px',
-      right: '20px',
-      padding: '6px 10px',
-      borderRadius: '8px',
-      background: CFG.UI.COLORS.info,
-      color: 'white',
-      fontFamily: 'system-ui, sans-serif',
-      fontSize: '14px',
-      zIndex: String(CFG.UI.Z),
-      display: 'flex',
-      alignItems: 'center',
-      gap: '8px',
+      position: 'fixed', bottom: '20px', right: '20px', padding: '6px 10px',
+      borderRadius: '8px', background: CFG.UI.COLORS.info, color: 'white',
+      fontFamily: 'system-ui, sans-serif', fontSize: '14px', zIndex: String(CFG.UI.Z),
+      display: 'flex', alignItems: 'center', gap: '8px',
     });
     const textEl = document.createElement('div'); textEl.textContent = '0 трейсов';
     const btn = document.createElement('button'); btn.textContent = '×';
@@ -138,31 +118,13 @@
     state.progress = api; return api;
   }
 
-  // ---------- Помощники поля запроса ----------
+  // ---------- Поле запроса ----------
   function getQueryInputEl() {
-    const root = pickOne(CFG.SELECTORS.textarea);
-    const c = [];
-    if (root) {
-      if (isEditable(root)) c.push(root);
-      c.push(
-        root.querySelector('textarea'),
-        root.querySelector('input[type="search"]'),
-        root.querySelector('input[type="text"]'),
-        root.querySelector('[contenteditable="true"]'),
-        root.querySelector('textarea.ace_text-input'),
-        root.querySelector('.monaco-editor textarea.inputarea'),
-      );
-    }
-    c.push(
-      qs('input[data-test-subj="queryInput"]'),
-      qs('textarea[data-test-subj="queryInput"]'),
-      qs('[data-test-subj="queryInput"] input[type="search"]'),
-      qs('[data-test-subj="queryInput"] input[type="text"]'),
-      qs('[data-test-subj="queryInput"] textarea'),
-      qs('[data-test-subj="queryInput"] [contenteditable="true"]'),
-    );
-    const filtered = c.filter(Boolean).filter(el => isEditable(el) && el.offsetParent !== null);
-    return filtered[0] || null;
+    const cands = CFG.SELECTORS.textarea
+      .map(s => qs(s))
+      .filter(Boolean)
+      .filter(el => isEditable(el) && el.offsetParent !== null);
+    return cands[0] || null;
   }
   function pressEnter(el) {
     if (!el) return;
@@ -172,77 +134,25 @@
     el.dispatchEvent(new KeyboardEvent('keyup', common));
   }
   function setNativeValue(el, val) {
-    const setter =
-      Object.getOwnPropertyDescriptor(el, 'value')?.set ||
-      Object.getOwnPropertyDescriptor(el.constructor?.prototype || {}, 'value')?.set ||
-      Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.set ||
-      Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value')?.set;
-    if (setter) setter.call(el, val); else el.value = val;
+    const desc =
+      Object.getOwnPropertyDescriptor(el.constructor?.prototype || {}, 'value') ||
+      Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value') ||
+      Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value');
+    if (desc?.set) desc.set.call(el, val); else el.value = val;
   }
   function clearEditable(el) {
     if (!el) return;
-    if (el.isContentEditable) { el.textContent = ''; }
-    else if ('value' in el) { try { setNativeValue(el, ''); } catch { el.value = ''; } }
-  }
-  function forceReactOnChange(el, value) {
-    try {
-      const propsKey = Object.keys(el).find(k => k.startsWith('__reactProps$'));
-      const props = propsKey ? el[propsKey] : null;
-      if (props && typeof props.onChange === 'function') {
-        setNativeValue(el, value);
-        props.onChange({ target: { value }, currentTarget: { value } });
-        return true;
-      }
-      const fiberKey = Object.keys(el).find(k => k.startsWith('__reactFiber$'));
-      const fiber = fiberKey ? el[fiberKey] : null;
-      const mp = fiber?.memoizedProps;
-      if (mp && typeof mp.onChange === 'function') {
-        setNativeValue(el, value);
-        mp.onChange({ target: { value }, currentTarget: { value } });
-        return true;
-      }
-    } catch {}
-    return false;
-  }
-  function trackerHack(el, value) {
-    try {
-      const tracker = el._valueTracker;
-      if (tracker) tracker.setValue(el.value);
-      const d =
-        Object.getOwnPropertyDescriptor(el.constructor?.prototype || {}, 'value') ||
-        Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value');
-      d?.set?.call(el, value);
-      el.dispatchEvent(new Event('input', { bubbles: true }));
-      el.dispatchEvent(new Event('change', { bubbles: true }));
-      return true;
-    } catch { return false; }
-  }
-  function typeCharByChar(el, value) {
-    try {
-      el.focus();
-      el.setSelectionRange?.(0, el.value?.length || 0);
-      let cur = '';
-      for (const ch of value) {
-        cur += ch;
-        setNativeValue(el, cur);
-        el.dispatchEvent(new InputEvent('input', { bubbles: true, data: ch, inputType: 'insertText' }));
-      }
-      el.dispatchEvent(new Event('change', { bubbles: true }));
-      return true;
-    } catch { return false; }
+    if ('value' in el) { try { setNativeValue(el, ''); } catch { el.value = ''; } }
   }
   function trySetValue(el, value) {
     try {
-      el.click?.(); el.focus();
-      if (forceReactOnChange(el, value)) return true;
-      if (trackerHack(el, value)) return true;
+      el.click?.(); el.focus?.();
       setNativeValue(el, value);
-      el.dispatchEvent(new InputEvent('input', { bubbles: true, data: value }));
+      // этого хватает, чтобы React/EUI подхватил изменение
+      el.dispatchEvent(new Event('input', { bubbles: true }));
       el.dispatchEvent(new Event('change', { bubbles: true }));
-      if (('value' in el && String(el.value) === String(value)) || el.textContent === value) return true;
-      if (typeCharByChar(el, value)) return true;
-    } catch {}
-    return false;
+      return ('value' in el ? String(el.value) === String(value) : false);
+    } catch { return false; }
   }
 
   // ---------- Таблица и извлечение трейсов ----------
@@ -274,16 +184,15 @@
     const pop = pickOne(CFG.SELECTORS.popover);
     if (!pop) return [];
     const seen = new Set();
-    const out = [];
     for (const sel of CFG.SELECTORS.popoverTraceItems) {
       const nodes = Array.from(pop.querySelectorAll(sel)).filter(el => el && el.offsetParent !== null);
       for (const el of nodes) {
         const v = (el.innerText || el.textContent || '').trim();
-        if (v && !seen.has(v)) { seen.add(v); out.push(v); }
+        if (v && !seen.has(v)) seen.add(v);
       }
-      if (out.length) return out;
+      if (seen.size) return Array.from(seen);
     }
-    return out;
+    return [];
   }
 
   // ---------- Вставка и запуск ----------
@@ -296,10 +205,9 @@
     const input = getQueryInputEl();
     if (input) {
       clearEditable(input);
-      const okSet = trySetValue(input, value);
+      trySetValue(input, value);
       await sleep(40);
       pressEnter(input);
-      if (!okSet) { typeCharByChar(input, value); }
     }
     if (cut && notifyLimitIfCut) ok(TEXTS.limitHit(CFG.LIMIT)); else ok(TEXTS.tracesInserted);
     if (state.didScrollDown) scrollTop0();
@@ -330,8 +238,10 @@
   try {
     const scrollable = pickOne(CFG.SELECTORS.scrollable);
     if (!scrollable) { err(TEXTS.notFoundScrollable); return; }
+
     const countEl = pickOne(CFG.SELECTORS.count);
     const totalCount = parseIntSafe(countEl?.textContent);
+
     const tableHolder = pickOne(CFG.SELECTORS.table);
     const tableEl = (function () {
       if (!tableHolder) return null;
@@ -340,6 +250,7 @@
       return tbl || tableHolder;
     })();
     if (!tableEl) { err(TEXTS.notFoundTable); return; }
+
     const traceIdx = getTraceColumnIndex(tableEl);
     if (traceIdx === -1) { err(TEXTS.notFoundTraces); return; }
 
@@ -357,11 +268,6 @@
       tracesBtn.click();
 
       if (fromPop.length > 0 && fromPop.length <= 4) { await insertAndRun(fromPop); return; }
-      if (fromPop.length > 4) {
-        const traces = await collectWithScroll(tableEl, traceIdx);
-        await insertAndRun(traces, { notifyLimitIfCut: true });
-        return;
-      }
 
       const traces = await collectWithScroll(tableEl, traceIdx);
       await insertAndRun(traces, { notifyLimitIfCut: true });
@@ -371,7 +277,7 @@
     const traces = await collectWithScroll(tableEl, traceIdx);
     await insertAndRun(traces, { notifyLimitIfCut: true });
   } catch (e) {
-    console.error('[Помощник трейсов v2] error:', e);
+    console.error('[Помощник трейсов v3] error:', e);
     err(TEXTS.genericOops);
   } finally {
     clearAllTimers();
