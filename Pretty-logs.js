@@ -5,8 +5,7 @@
   // Изменения:
   // 1) Тексты успехов/ошибок вынесены в один объект TEXTS.
   // 2) Фиксированный набор колонок и порядок: Time, message.message, message.exception, Payload.
-  // 3) Починил парсинг SOAP/встроенного XML: ищем и красиво форматируем XML-фрагмент внутри текста
-  //    (префикс, например "SOAP-OUT message:", переносится на отдельную строку перед XML).
+  // 3) Красивый парсинг JSON и SOAP/XML (встроенные фрагменты тоже).
 
   // ---------- Конфиг ----------
   const CFG = {
@@ -17,7 +16,7 @@
       MAX_TOTAL_OUT: 500_000,
     },
     OUTPUT: {
-      HARD_INDENT: true,            // NBSP для ведущих пробелов
+      HARD_INDENT: true,           // NBSP для ведущих пробелов
       COL_SEP: '\u00A0\u00A0',     // два NBSP между столбцами
       WRAP_MARKDOWN: false,
     },
@@ -38,12 +37,12 @@
 
   // ---------- Уведомления ----------
   function ensureNotif() {
-    if (window.__notifV3) return window.__notifV3;
+    if (window.__notifLogV3) return window.__notifLogV3;
     const box = document.createElement('div');
     Object.assign(box.style, { position: 'fixed', bottom: '20px', right: '20px', zIndex: String(CFG.UI.Z), display: 'flex', flexDirection: 'column', gap: '8px' });
     document.body.appendChild(box);
-    window.__notifV3 = { box, current: null, timer: null };
-    return window.__notifV3;
+    window.__notifLogV3 = { box, current: null, timer: null };
+    return window.__notifLogV3;
   }
   function notify(text, type = 'info', ms = CFG.UI.DURATION) {
     const n = ensureNotif();
@@ -57,8 +56,9 @@
       color: 'white', fontFamily: 'system-ui, sans-serif', fontSize: '14px', minWidth: '160px', textAlign: 'center',
       boxShadow: '0 2px 6px rgba(0,0,0,0.2)'
     });
+    d.addEventListener('click', () => { if (n.timer) clearTimeout(n.timer); d.remove(); n.current = null; n.timer = null; });
     n.box.appendChild(d); n.current = d;
-    n.timer = setTimeout(() => { if (n.current === d) { d.remove(); n.current = null; } n.timer = null; }, Math.max(300, ms|0));
+    n.timer = setTimeout(() => { if (n.current === d) { d.remove(); n.current = null; } n.timer = null; }, Math.max(300, ms | 0));
   }
   const ok = (m) => notify(m, 'success');
   const err = (m) => notify(m, 'error');
@@ -73,7 +73,7 @@
   const protectLeadingSpaces = (s) => CFG.OUTPUT.HARD_INDENT ? s.replace(/^ +/gm, (m) => NBSP.repeat(m.length)) : s;
 
   // ---------- Фиксированные колонки ----------
-  const WANTED = ['Time','message.message','message.exception','Payload'];
+  const WANTED = ['Time', 'message.message', 'message.exception', 'Payload'];
   const WANTED_NORM = WANTED.map(norm);
 
   // ---------- Prettify JSON/XML ----------
@@ -97,7 +97,11 @@
       for (; j < s.length; j++) {
         const c = s[j];
         if (inStr) { if (esc) esc = false; else if (c === '\\') esc = true; else if (c === '"') inStr = false; }
-        else { if (c === '"') inStr = true; else if (c === open) depth++; else if (c === close) { depth--; if (depth === 0) break; } }
+        else {
+          if (c === '"') inStr = true;
+          else if (c === open) depth++;
+          else if (c === close) { depth--; if (depth === 0) break; }
+        }
       }
       if (depth !== 0) { out += s[i++]; continue; }
       const candidate = s.slice(i, j + 1);
@@ -131,9 +135,9 @@
     let indent = 0; const out = [];
     for (const line of lines) {
       const isClose = /^<\/[^>]+>/.test(line);
-      const isSelf  = /\/>$/.test(line) || /^<[^>]+\/>$/.test(line);
-      const isDecl  = /^<\?xml/.test(line);
-      const isCmnt  = /^<!--/.test(line) && /-->$/.test(line);
+      const isSelf = /\/>$/.test(line) || /^<[^>]+\/>$/.test(line);
+      const isDecl = /^<\?xml/.test(line);
+      const isCmnt = /^<!--/.test(line) && /-->$/.test(line);
       if (isClose) indent = Math.max(indent - 1, 0);
       out.push('  '.repeat(indent) + line);
       if (!isClose && !isSelf && !isDecl && !isCmnt && /^<[^!?][^>]*>$/.test(line)) indent++;
@@ -146,11 +150,11 @@
     const normed = parseXmlSafe(text.trim());
     return normed ? indentXml(normed) : null;
   }
-  // Встроенный XML внутри строки: берём подстроку между первым '<' и последним '>' и пробуем парсить/красиво отформатировать.
+  // Встроенный XML внутри строки.
   function prettyXmlEmbedded(text) {
     if (!text) return null;
     const maxScan = CFG.LIMIT.MAX_FIELD_CHARS;
-    if (text.length > maxScan) return null; // защита от тяжёлых полей
+    if (text.length > maxScan) return null;
     const first = text.indexOf('<');
     const last = text.lastIndexOf('>');
     if (first === -1 || last <= first) return null;
@@ -160,24 +164,21 @@
       if (normed) {
         const pretty = indentXml(normed);
         const before = text.slice(0, first).replace(/\s+$/, '');
-        const after  = text.slice(end + 1).replace(/^\s+/, '');
+        const after = text.slice(end + 1).replace(/^\s+/, '');
         return (before ? before + '\n' : '') + pretty + (after ? '\n' + after : '');
       }
-      if (end - first < 32) break; // ранний выход
+      if (end - first < 32) break;
     }
     return null;
   }
-
   function prettyValue(raw, colName) {
     let v = (raw ?? '').toString();
-    if (norm(colName) === 'message.exception') {
-      v = (v.split(/\r?\n/)[0] || '').trim();
-    }
+    if (norm(colName) === 'message.exception') v = (v.split(/\r?\n/)[0] || '').trim();
     if (isEmptyToken(v)) return '';
     const wholeJ = prettyWholeJson(v); if (wholeJ !== null) return wholeJ.trim();
-    const fragJ  = prettyJsonFragments(v); if (fragJ  !== null) return fragJ.trim();
-    const wholeX = prettyXmlWhole(v);      if (wholeX !== null) return wholeX.trim();
-    const embX   = prettyXmlEmbedded(v);   if (embX   !== null) return embX.trim();
+    const fragJ = prettyJsonFragments(v); if (fragJ !== null) return fragJ.trim();
+    const wholeX = prettyXmlWhole(v); if (wholeX !== null) return wholeX.trim();
+    const embX = prettyXmlEmbedded(v); if (embX !== null) return embX.trim();
     return v.trim();
   }
 
@@ -187,9 +188,9 @@
   const range = selection.getRangeAt(0);
   const common = range.commonAncestorContainer.nodeType === 1 ? range.commonAncestorContainer : range.commonAncestorContainer.parentElement;
   const nearestTable = common?.closest?.('table') || common?.querySelector?.('table') || document.querySelector('table');
-  const nearestGrid  = common?.closest?.('[role="grid"], [role="table"]') || common?.querySelector?.('[role="grid"], [role="table"]');
+  const nearestGrid = common?.closest?.('[role="grid"], [role="table"]') || common?.querySelector?.('[role="grid"], [role="table"]');
 
-  // ---------- Построение индексов для фиксированных колонок ----------
+  // ---------- Построение индексов ----------
   function buildIdxMapFromHeaders(headers) {
     const idxMap = new Map();
     const headersNorm = headers.map(norm);
@@ -279,5 +280,5 @@
   }
 
   const copied = await copy(out);
-  if (copied) notify(TEXTS.copy_ok, 'success'); else { console.log(out); err(TEXTS.copy_fail); }
+  if (copied) ok(TEXTS.copy_ok); else { console.log(out); err(TEXTS.copy_fail); }
 })();
