@@ -120,7 +120,7 @@
 
   // --- извлечение из таблицы ---
   const sel = window.getSelection();
-  if (!sel || sel.rangeCount === 0 || !sel.toString().trim()) { showError("Текст не выделен"); return; }
+  if (!sel || sel.rangeCount === 0 || !sel.toString().trim()) { showError("Ничего не выделено"); return; }
 
   const allTr = Array.from(document.querySelectorAll("tr"));
   const selectedTr = allTr.filter(tr => sel.containsNode(tr, true));
@@ -189,7 +189,7 @@
     if (fbTable && buildIdxMapFromTable(fbTable)) rows = extractFromTable(fbTable, [anchorTr]);
   }
 
-  if (!rows.length) { showError("Не обнаружены нужные филды"); return; }
+  if (!rows.length) { showError("Не обнаружены подходящие филды"); return; }
 
   // формируем строки: разделитель — два пробела; без хвостовых пробелов
   const lines = rows
