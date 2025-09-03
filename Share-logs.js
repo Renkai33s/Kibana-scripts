@@ -31,7 +31,7 @@
     copy_not_found: 'Кнопка "Copy link" не найдена',
     copy_fail: 'Не удалось скопировать',
     url_cleaned: 'URL очищен, продолжаем…',
-    done: 'Готово',
+    done: 'Ссылка скопирована',
     oops: 'Что-то пошло не так',
   };
 
@@ -83,7 +83,7 @@
     catch { el.click?.(); }
   }
 
-  // ---------- Чистка savedSearch БЕЗ перезагрузки ----------
+  // ---------- Чистка savedSearch ----------
   (function cleanSavedSearchInPlace() {
     try {
       const url = window.location.href;
