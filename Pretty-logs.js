@@ -5,7 +5,7 @@
 
   const CFG = {
     LIMIT: { MAX_ROWS: 500, MAX_FIELD_CHARS: 50_000, MAX_JSON_SCAN: 80_000, MAX_TOTAL_OUT: 500_000 },
-    OUTPUT: { HARD_INDENT: true, COL_SEP: '\u00A0\u00A0', WRAP_MARKDOWN: false },
+    OUTPUT: { HARD_INDENT: true, COL_SEP: '  ', WRAP_MARKDOWN: false },
     UI: { Z: 999999, COLORS: { success: '#52c41a', error: '#ff4d4f', warn: '#faad14', info: '#3498db' }, DURATION: 2000 },
   };
 
@@ -46,13 +46,12 @@
   const err = (m) => notify(m, 'error');
 
   // ---------- Текст/нормализация ----------
-  const NBSP = '\u00A0';
   const norm = (s) => (s ?? '').trim().replace(/\s+/g, ' ').toLowerCase();
   const isEmptyToken = (v) => {
     const t = (v ?? '').toString().trim().toLowerCase();
     return !t || t === '-' || t === '—' || t === '–' || t === 'n/a' || t === 'null' || t === 'undefined' || t === 'none';
   };
-  const protectLeadingSpaces = (s) => CFG.OUTPUT.HARD_INDENT ? s.replace(/^ +/gm, (m) => NBSP.repeat(m.length)) : s;
+  const protectLeadingSpaces = (s) => CFG.OUTPUT.HARD_INDENT ? s.replace(/^ +/gm, (m) => ' '.repeat(m.length)) : s;
 
   // ---------- Колонки ----------
   const WANTED = ['Time', 'message.message', 'message.exception', 'Payload'];
