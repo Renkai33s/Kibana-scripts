@@ -171,7 +171,19 @@
     const common = range.commonAncestorContainer.nodeType === 1
       ? range.commonAncestorContainer
       : range.commonAncestorContainer.parentElement;
-    const table = common?.closest?.('table') || null;
+    let table = common?.closest?.('table') || null;
+    if (!table) {
+      const allRowsGlob = Array.from(document.querySelectorAll('tbody tr, tr'));
+      const rowsInSel = allRowsGlob.filter(tr => selection.containsNode(tr, true));
+      if (rowsInSel.length) {
+        const counts = new Map();
+        rowsInSel.forEach(tr => {
+          const t = tr.closest('table');
+          if (t) counts.set(t, (counts.get(t) || 0) + 1);
+        });
+        table = Array.from(counts.entries()).sort((a, b) => b[1] - a[1])[0]?.[0] || null;
+      }
+    }
     if (!table) { err(TEXTS.no_fields); return; }
 
     // ---------- Индексы ----------
