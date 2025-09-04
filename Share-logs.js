@@ -19,6 +19,13 @@
       TRY_COPY_DIRECT: true,    // пытаться копировать прямо из поля URL
       CLOSE_BEHAVIOR: 'escape', // 'none' | 'escape' | 'toggle'
     },
+    SELECTORS: {
+      shareButton: ['[data-test-subj="shareTopNavButton"]'],
+      shareDialog: ['[role="dialog"]', '[data-test-subj="sharePanel"]'],
+      shortToggle: ['button[data-test-subj="useShortUrl"]'],
+      copyButton: ['button[data-test-subj*="copy"]', '[data-test-subj*="copy"]'],
+      urlField: ['input[value^="http"]', 'textarea[value^="http"]'],
+    },
   };
 
   const TEXTS = {
@@ -76,6 +83,7 @@
   function clearAllTimers() { for (const t of state.timers) clearTimeout(t); state.timers.clear(); }
   const qs = (sel, root = document) => { try { return root.querySelector(sel); } catch { return null; } };
   const qsa = (sel, root = document) => { try { return Array.from(root.querySelectorAll(sel)); } catch { return []; } };
+  function pickOne(cands, root = document) { for (const s of cands || []) { const el = qs(s, root); if (el) return el; } return null; }
   const isVisible = (el) => !!(el && el.offsetParent !== null);
   function clickSafe(el) {
     if (!el) return;
@@ -101,9 +109,8 @@
   try {
     // 1) Находим Share
     function findShareButton() {
-      const bySubj = qs('[data-test-subj="shareTopNavButton"]');
-      if (isVisible(bySubj)) return bySubj;
-      return null;
+      const el = pickOne(CFG.SELECTORS.shareButton);
+      return isVisible(el) ? el : null;
     }
     const shareBtn = findShareButton();
     if (!shareBtn) { err(TEXTS.share_not_found); return; }
@@ -113,7 +120,7 @@
     async function waitForShareDialog(timeoutMs = CFG.TIMEOUT) {
       const t0 = Date.now();
       while (Date.now() - t0 < timeoutMs) {
-        const dlg = qs('[role="dialog"]') || qs('[data-test-subj="sharePanel"]');
+        const dlg = pickOne(CFG.SELECTORS.shareDialog);
         if (dlg && isVisible(dlg)) return dlg;
         await sleep(CFG.POLL);
       }
@@ -123,16 +130,15 @@
     if (!dialog) { err(TEXTS.panel_not_ready); return; }
 
     function findShortToggle(root) {
-      const btn = qs('button[data-test-subj="useShortUrl"]', root);
+      const btn = pickOne(CFG.SELECTORS.shortToggle, root);
       return (btn && isVisible(btn)) ? btn : null;
     }
     function findCopyButton(root) {
-      const bySubj = qs('button[data-test-subj*="copy"]', root) || qs('[data-test-subj*="copy"]', root);
-      if (bySubj && isVisible(bySubj)) return bySubj;
-      return null;
+      const el = pickOne(CFG.SELECTORS.copyButton, root);
+      return (el && isVisible(el)) ? el : null;
     }
     function getUrlFromPanel(root) {
-      const inp = qs('input[value^="http"], textarea[value^="http"]', root);
+      const inp = pickOne(CFG.SELECTORS.urlField, root);
       if (!inp || !isVisible(inp)) return '';
       const v = (inp.value ?? inp.getAttribute?.('value') ?? inp.textContent ?? '').toString().trim();
       return v.startsWith('http') ? v : '';
@@ -159,6 +165,7 @@
       try {
         if (navigator.clipboard && window.isSecureContext) { await navigator.clipboard.writeText(text); return true; }
       } catch {}
+      return false;
     }
 
     let copied = false;
