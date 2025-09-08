@@ -128,14 +128,43 @@
       .filter(el => isEditable(el) && el.offsetParent !== null);
     return cands[0] || null;
   }
+
+  // Поиск combobox'ов в документе, shadow DOM и доступных iframe
+  function getAllComboboxes() {
+    const out = [];
+    const pushFromRoot = (root) => {
+      try {
+        out.push(...root.querySelectorAll((CFG.SELECTORS.combobox || ['[role="combobox"]'])[0]));
+        const all = root.querySelectorAll('*');
+        all.forEach(el => { if (el.shadowRoot) out.push(...el.shadowRoot.querySelectorAll('[role="combobox"]')); });
+      } catch {}
+    };
+    pushFromRoot(document);
+    const iframes = Array.from(document.querySelectorAll('iframe')).filter(f => {
+      try { return !!f.contentDocument; } catch { return false; }
+    });
+    for (const f of iframes) {
+      try { pushFromRoot(f.contentDocument); } catch {}
+    }
+    return Array.from(new Set(out));
+  }
+
   function pressEnter(el) {
     if (!el) return;
     const common = { key: 'Enter', code: 'Enter', keyCode: 13, which: 13, bubbles: true, cancelable: true };
     el.dispatchEvent(new KeyboardEvent('keydown', common));
     el.dispatchEvent(new KeyboardEvent('keypress', common));
     el.dispatchEvent(new KeyboardEvent('keyup', common));
-    const combos = (CFG.SELECTORS.combobox || []).flatMap(s => Array.from(document.querySelectorAll(s)));
-    combos.forEach(c => c.setAttribute('aria-expanded', 'false'));
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        const combos = getAllComboboxes();
+        combos.forEach(c => c.setAttribute('aria-expanded', 'false'));
+        const ae = document.activeElement;
+        if (ae && ae.blur) ae.blur();
+        document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', code: 'Escape', keyCode: 27, which: 27, bubbles: true }));
+        document.body?.click?.();
+      });
+    });
   }
   function setNativeValue(el, val) {
     const desc =
@@ -295,7 +324,7 @@
     const traces = await collectWithScroll(tableEl, traceIdx);
     await insertAndRun(traces, { notifyLimitIfCut: true });
   } catch (e) {
-    console.error('[Auto-trace v2] error:', e);
+    console.error('[Помощник трейсов v3] error:', e);
     err(TEXTS.genericOops);
   } finally {
     clearAllTimers();
