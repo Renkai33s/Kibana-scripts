@@ -248,7 +248,7 @@
     const copied = await copy(out);
     if (copied) ok(TEXTS.copy_ok); else { console.log(out); err(TEXTS.copy_fail); }
   } catch (e) {
-    console.error('[Логовый форматтер v3.2 TABLE] error:', e);
+    console.error('[Pretty-logs v2] error:', e);
     err(TEXTS.oops);
   }
 })();
