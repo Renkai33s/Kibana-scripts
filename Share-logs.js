@@ -192,7 +192,7 @@
 
     notify(TEXTS.done, 'success', 1200);
   } catch (e) {
-    console.error('[Share Short URL Helper v2] error:', e);
+    console.error('[Share-logs v2] error:', e);
     err(TEXTS.oops);
   } finally {
     clearAllTimers();
