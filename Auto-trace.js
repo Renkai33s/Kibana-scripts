@@ -26,6 +26,7 @@
       tracesBtn: ['[data-test-subj="field-message.traceid-showDetails"]'],
       popover: ['.dscSidebarItem__fieldPopoverPanel'],
       popoverTraceItems: ['[data-test-subj="fieldVisualizeBucketContainer"] .euiText[title]'],
+      combobox: ['[role="combobox"]'],
     },
   };
 
@@ -133,6 +134,8 @@
     el.dispatchEvent(new KeyboardEvent('keydown', common));
     el.dispatchEvent(new KeyboardEvent('keypress', common));
     el.dispatchEvent(new KeyboardEvent('keyup', common));
+    const combos = (CFG.SELECTORS.combobox || []).flatMap(s => Array.from(document.querySelectorAll(s)));
+    combos.forEach(c => c.setAttribute('aria-expanded', 'false'));
   }
   function setNativeValue(el, val) {
     const desc =
@@ -292,7 +295,7 @@
     const traces = await collectWithScroll(tableEl, traceIdx);
     await insertAndRun(traces, { notifyLimitIfCut: true });
   } catch (e) {
-    console.error('[Помощник трейсов v3] error:', e);
+    console.error('[Auto-trace v2] error:', e);
     err(TEXTS.genericOops);
   } finally {
     clearAllTimers();
