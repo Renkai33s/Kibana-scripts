@@ -208,13 +208,10 @@
       trySetValue(input, value);
       await sleep(40);
       pressEnter(input);
-      await sleep(50);
-      document.body.click();
     }
     if (notifyLimitIfCut && uniq.length >= CFG.LIMIT) ok(TEXTS.limitHit(CFG.LIMIT)); else ok(TEXTS.tracesInserted);
     if (state.didScrollDown) scrollTop0();
   }
-
 
   // ---------- Сбор со скроллом ----------
   async function collectWithScroll(tableEl, traceIdx) {
