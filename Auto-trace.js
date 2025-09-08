@@ -196,24 +196,27 @@
   }
 
   // ---------- Вставка и запуск ----------
-async function insertAndRun(traces, { notifyLimitIfCut = false } = {}) {
-  const uniq = Array.from(new Set(Array.isArray(traces) ? traces : []));
-  if (uniq.length === 0) { err(TEXTS.notFoundTraces); return; }
-  let payload = uniq;
-  if (uniq.length > CFG.LIMIT) { payload = uniq.slice(0, CFG.LIMIT); }
-  const value = '(' + payload.map(t => JSON.stringify(t)).join(' ') + ')';
-  const input = getQueryInputEl();
-  if (input) {
-    clearEditable(input);
-    trySetValue(input, value);
-    await sleep(40);
-    pressEnter(input);
-    input.blur();
-    document.body.focus(); 
+  async function insertAndRun(traces, { notifyLimitIfCut = false } = {}) {
+    const uniq = Array.from(new Set(Array.isArray(traces) ? traces : []));
+    if (uniq.length === 0) { err(TEXTS.notFoundTraces); return; }
+    let payload = uniq;
+    if (uniq.length > CFG.LIMIT) { payload = uniq.slice(0, CFG.LIMIT); }
+    const value = '(' + payload.map(t => JSON.stringify(t)).join(' ') + ')';
+    const input = getQueryInputEl();
+    if (input) {
+      const current = 'value' in input ? String(input.value) : '';
+      if (current !== value) {
+        clearEditable(input);
+        trySetValue(input, value);
+      }
+      await sleep(40);
+      pressEnter(input);
+      input.blur();
+      document.body.focus();
+    }
+    if (notifyLimitIfCut && uniq.length >= CFG.LIMIT) ok(TEXTS.limitHit(CFG.LIMIT)); else ok(TEXTS.tracesInserted);
+    if (state.didScrollDown) scrollTop0();
   }
-  if (notifyLimitIfCut && uniq.length >= CFG.LIMIT) ok(TEXTS.limitHit(CFG.LIMIT)); else ok(TEXTS.tracesInserted);
-  if (state.didScrollDown) scrollTop0();
-}
 
 
   // ---------- Сбор со скроллом ----------
