@@ -23,6 +23,7 @@
       count: ['[data-test-subj="discoverQueryHits"]'],
       table: ['[data-test-subj="docTable"]'],
       textarea: ['textarea[data-test-subj="queryInput"]'],
+      submitBtn: ['[data-test-subj="querySubmitButton"]'],
       tracesBtn: ['[data-test-subj="field-message.traceid-showDetails"]'],
       popover: ['.dscSidebarItem__fieldPopoverPanel'],
       popoverTraceItems: ['[data-test-subj="fieldVisualizeBucketContainer"] .euiText[title]'],
@@ -90,6 +91,31 @@
       return t === 'text' || t === 'search';
     }
     return false;
+  };
+  const defocus = (el) => {
+    const doBlur = () => {
+      try { el?.blur?.(); } catch {}
+      try { document.body?.focus?.(); } catch {}
+    };
+    doBlur();
+    try { requestAnimationFrame(() => doBlur()); } catch {}
+    setTimeout(doBlur, 0);
+    setTimeout(doBlur, 60);
+    setTimeout(doBlur, 300);
+  };
+  const clickEl = (el) => {
+    if (!el) return false;
+    try {
+      el.focus?.();
+      el.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }));
+      el.dispatchEvent(new MouseEvent('mouseup', { bubbles: true }));
+      el.click?.();
+      el.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    } catch {
+      try { el.click?.(); } catch { return false; }
+    }
+    defocus(el);
+    return true;
   };
 
   // ---------- Progress chip ----------
@@ -201,9 +227,16 @@
         trySetValue(input, value);
       }
       await sleep(40);
-      pressEnter(input);
-      input.blur();
-      document.body.focus();
+
+      const submitBtn = pickOne(CFG.SELECTORS.submitBtn);
+      if (!clickEl(submitBtn)) {
+        pressEnter(input);
+      } else {
+        setTimeout(() => defocus(submitBtn), 80);
+      }
+
+      input.blur?.();
+      document.body.focus?.();
     }
     if (notifyLimitIfCut && uniq.length >= CFG.LIMIT) ok(TEXTS.limitHit(CFG.LIMIT)); else ok(TEXTS.tracesInserted);
     if (state.didScrollDown) scrollTop0();
