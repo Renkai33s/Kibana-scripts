@@ -1,7 +1,7 @@
 (async () => {
-  // =========================
-  // Auto-trace v2
-  // =========================
+  // =========================================================
+  // Auto-trace v2  •  unified style
+  // =========================================================
 
   const NS = 'Auto-trace v2';
   const state = (window[NS] ||= {
@@ -40,24 +40,24 @@
     cannotDetectCount: 'Не удалось определить количество трейсов',
   };
 
-  // ---------- Уведомления ----------
-  function ensureNotif() {
-    if (window.__notifTraceV3) return window.__notifTraceV3;
+  // ---------- Notifications (unified) ----------
+  const createNotifier = (key) => {
+    if (window[key]) return window[key];
     const box = document.createElement('div');
     Object.assign(box.style, {
       position: 'fixed', bottom: '20px', right: '20px', zIndex: String(CFG.UI.Z),
       display: 'flex', flexDirection: 'column', gap: '8px',
     });
     document.body.appendChild(box);
-    window.__notifTraceV3 = { box, current: null, timer: null };
-    return window.__notifTraceV3;
-  }
-  function notify(text, type = 'info', ms = CFG.UI.DURATION) {
-    const n = ensureNotif();
-    if (n.timer) { clearTimeout(n.timer); n.timer = null; }
-    if (n.current) { n.current.remove(); n.current = null; }
+    return (window[key] = { box, current: null, timer: null });
+  };
+  const notif = createNotifier('__notif_autotrace');
+  const notify = (text, type = 'info', ms = CFG.UI.DURATION) => {
+    if (notif.timer) { clearTimeout(notif.timer); notif.timer = null; }
+    if (notif.current) { notif.current.remove(); notif.current = null; }
     const d = document.createElement('div');
-    d.setAttribute('role', 'status'); d.setAttribute('aria-live', 'polite');
+    d.setAttribute('role', 'status');
+    d.setAttribute('aria-live', 'polite');
     d.textContent = text;
     Object.assign(d.style, {
       padding: '10px 14px', borderRadius: '8px',
@@ -65,28 +65,23 @@
       fontFamily: 'system-ui, sans-serif', fontSize: '14px', minWidth: '160px',
       textAlign: 'center', boxShadow: '0 2px 6px rgba(0,0,0,0.2)', userSelect: 'none', cursor: 'pointer',
     });
-    d.addEventListener('click', () => { if (n.timer) clearTimeout(n.timer); d.remove(); n.current = null; n.timer = null; });
-    n.box.appendChild(d); n.current = d;
-    n.timer = setTimeout(() => { if (n.current === d) { d.remove(); n.current = null; } n.timer = null; }, Math.max(300, ms | 0));
-  }
+    d.addEventListener('click', () => { if (notif.timer) clearTimeout(notif.timer); d.remove(); notif.current = null; notif.timer = null; });
+    notif.box.appendChild(d); notif.current = d;
+    notif.timer = setTimeout(() => { if (notif.current === d) { d.remove(); notif.current = null; } notif.timer = null; }, Math.max(300, ms | 0));
+  };
   const ok = (m) => notify(m, 'success');
   const err = (m) => notify(m, 'error');
   const warn = (m) => notify(m, 'warn');
   const info = (m) => notify(m, 'info');
 
-  // ---------- Утилиты ----------
-  const qs = (sel) => { try { return document.querySelector(sel); } catch { return null; } };
-  function pickOne(cands) { for (const s of cands) { const el = qs(s); if (el) return el; } return null; }
-  function parseIntSafe(t) { if (!t) return 0; const n = parseInt(String(t).replace(/[^0-9]/g, ''), 10); return Number.isFinite(n) ? n : 0; }
-  function sleep(ms) {
-    return new Promise(r => {
-      const t = setTimeout(() => { state.timers.delete(t); r(); }, ms);
-      state.timers.add(t);
-    });
-  }
-  function clearAllTimers() { for (const t of state.timers) clearTimeout(t); state.timers.clear(); }
-  function scrollTop0() { const s = pickOne(CFG.SELECTORS.scrollable); if (s) s.scrollTop = 0; state.didScrollDown = false; }
-  function isEditable(el) {
+  // ---------- Utils (unified) ----------
+  const qs = (sel, root = document) => { try { return root.querySelector(sel); } catch { return null; } };
+  const pickOne = (cands, root = document) => { for (const s of cands || []) { const el = qs(s, root); if (el) return el; } return null; };
+  const parseIntSafe = (t) => { if (!t) return 0; const n = parseInt(String(t).replace(/[^0-9]/g, ''), 10); return Number.isFinite(n) ? n : 0; };
+  const sleep = (ms) => new Promise((r) => { const t = setTimeout(() => { state.timers.delete(t); r(); }, ms); state.timers.add(t); });
+  const clearAllTimers = () => { for (const t of state.timers) clearTimeout(t); state.timers.clear(); };
+  const scrollTop0 = () => { const s = pickOne(CFG.SELECTORS.scrollable); if (s) s.scrollTop = 0; state.didScrollDown = false; };
+  const isEditable = (el) => {
     if (!el) return false;
     const tag = el.tagName?.toLowerCase();
     if (tag === 'textarea') return true;
@@ -95,10 +90,10 @@
       return t === 'text' || t === 'search';
     }
     return false;
-  }
+  };
 
-  // ---------- Прогресс ----------
-  function showProgress() {
+  // ---------- Progress chip ----------
+  const showProgress = () => {
     if (state.progress) state.progress.remove?.();
     const box = document.createElement('div');
     Object.assign(box.style, {
@@ -117,35 +112,30 @@
       onStop(h) { btn.addEventListener('click', h, { once: true }); },
     };
     state.progress = api; return api;
-  }
+  };
 
-  // ---------- Поле запроса ----------
-  function getQueryInputEl() {
-    const cands = CFG.SELECTORS.textarea
-      .map(s => qs(s))
-      .filter(Boolean)
-      .filter(el => isEditable(el) && el.offsetParent !== null);
-    return cands[0] || null;
-  }
-  function pressEnter(el) {
+  // ---------- Query input ----------
+  const getQueryInputEl = () =>
+    (CFG.SELECTORS.textarea.map((s) => qs(s)).filter(Boolean).filter((el) => isEditable(el) && el.offsetParent !== null)[0] || null);
+
+  const pressEnter = (el) => {
     if (!el) return;
     const common = { key: 'Enter', code: 'Enter', keyCode: 13, which: 13, bubbles: true, cancelable: true };
     el.dispatchEvent(new KeyboardEvent('keydown', common));
     el.dispatchEvent(new KeyboardEvent('keypress', common));
     el.dispatchEvent(new KeyboardEvent('keyup', common));
-  }
-  function setNativeValue(el, val) {
+  };
+
+  const setNativeValue = (el, val) => {
     const desc =
       Object.getOwnPropertyDescriptor(el.constructor?.prototype || {}, 'value') ||
       Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value') ||
       Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value');
     if (desc?.set) desc.set.call(el, val); else el.value = val;
-  }
-  function clearEditable(el) {
-    if (!el) return;
-    if ('value' in el) { try { setNativeValue(el, ''); } catch { el.value = ''; } }
-  }
-  function trySetValue(el, value) {
+  };
+
+  const clearEditable = (el) => { if (!el) return; if ('value' in el) { try { setNativeValue(el, ''); } catch { el.value = ''; } } };
+  const trySetValue = (el, value) => {
     try {
       el.click?.(); el.focus?.();
       setNativeValue(el, value);
@@ -153,18 +143,19 @@
       el.dispatchEvent(new Event('change', { bubbles: true }));
       return ('value' in el ? String(el.value) === String(value) : false);
     } catch { return false; }
-  }
+  };
 
-  // ---------- Таблица и извлечение трейсов ----------
-  function getTraceColumnIndex(tableEl) {
+  // ---------- Table & extraction ----------
+  const getTraceColumnIndex = (tableEl) => {
     const headerCells = Array.from(tableEl?.tHead?.rows?.[0]?.cells || []);
-    const names = headerCells.map(th => (th.innerText || th.textContent || '').trim().toLowerCase());
-    let idx = names.findIndex(n => n.includes('message.traceid'));
-    if (idx === -1) idx = names.findIndex(n => n.includes('traceid'));
-    if (idx === -1) idx = names.findIndex(n => n.includes('trace id'));
+    const names = headerCells.map((th) => (th.innerText || th.textContent || '').trim().toLowerCase());
+    let idx = names.findIndex((n) => n.includes('message.traceid'));
+    if (idx === -1) idx = names.findIndex((n) => n.includes('traceid'));
+    if (idx === -1) idx = names.findIndex((n) => n.includes('trace id'));
     return idx;
-  }
-  function getTracesFromTable(tableEl, traceIdx, limit = Infinity) {
+  };
+
+  const getTracesFromTable = (tableEl, traceIdx, limit = Infinity) => {
     if (!tableEl || traceIdx == null || traceIdx < 0) return [];
     const seen = new Set();
     const traces = [];
@@ -173,19 +164,19 @@
       const cell = row.children[traceIdx];
       const val = (cell?.innerText || cell?.textContent || '').trim();
       if (val && val !== '-' && !seen.has(val)) {
-        seen.add(val);
-        traces.push(val);
+        seen.add(val); traces.push(val);
         if (traces.length >= limit) break;
       }
     }
     return traces;
-  }
-  function getTracesFromPopover() {
+  };
+
+  const getTracesFromPopover = () => {
     const pop = pickOne(CFG.SELECTORS.popover);
     if (!pop) return [];
     const seen = new Set();
     for (const sel of CFG.SELECTORS.popoverTraceItems) {
-      const nodes = Array.from(pop.querySelectorAll(sel)).filter(el => el && el.offsetParent !== null);
+      const nodes = Array.from(pop.querySelectorAll(sel)).filter((el) => el && el.offsetParent !== null);
       for (const el of nodes) {
         const v = (el.innerText || el.textContent || '').trim();
         if (v && !seen.has(v)) seen.add(v);
@@ -193,15 +184,15 @@
       if (seen.size) return Array.from(seen);
     }
     return [];
-  }
+  };
 
-  // ---------- Вставка и запуск ----------
-  async function insertAndRun(traces, { notifyLimitIfCut = false } = {}) {
+  // ---------- Insert & run ----------
+  const insertAndRun = async (traces, { notifyLimitIfCut = false } = {}) => {
     const uniq = Array.from(new Set(Array.isArray(traces) ? traces : []));
     if (uniq.length === 0) { err(TEXTS.notFoundTraces); return; }
     let payload = uniq;
-    if (uniq.length > CFG.LIMIT) { payload = uniq.slice(0, CFG.LIMIT); }
-    const value = '(' + payload.map(t => JSON.stringify(t)).join(' ') + ')';
+    if (uniq.length > CFG.LIMIT) payload = uniq.slice(0, CFG.LIMIT);
+    const value = '(' + payload.map((t) => JSON.stringify(t)).join(' ') + ')';
     const input = getQueryInputEl();
     if (input) {
       const current = 'value' in input ? String(input.value) : '';
@@ -216,27 +207,20 @@
     }
     if (notifyLimitIfCut && uniq.length >= CFG.LIMIT) ok(TEXTS.limitHit(CFG.LIMIT)); else ok(TEXTS.tracesInserted);
     if (state.didScrollDown) scrollTop0();
-  }
+  };
 
-
-  // ---------- Сбор со скроллом ----------
-  async function collectWithScroll(tableEl, traceIdx) {
+  // ---------- Collect with scroll ----------
+  const collectWithScroll = async (tableEl, traceIdx) => {
     const scrollable = pickOne(CFG.SELECTORS.scrollable);
     if (!scrollable) { err(TEXTS.notFoundScrollable); return []; }
 
     const prog = showProgress();
-
     state.stop = false;
-    prog.onStop(() => {
-      state.stop = true;
-      prog.remove();
-    });
+    prog.onStop(() => { state.stop = true; prog.remove(); });
 
     let last = -1, stable = 0;
     for (let i = 0; i < 600; i++) {
-      if (state.stop) {
-        return getTracesFromTable(tableEl, traceIdx);
-      }
+      if (state.stop) return getTracesFromTable(tableEl, traceIdx);
 
       scrollable.scrollTop = scrollable.scrollHeight;
       state.didScrollDown = true;
@@ -253,9 +237,9 @@
     }
     prog.remove();
     return getTracesFromTable(tableEl, traceIdx);
-  }
+  };
 
-  // ---------- Основной сценарий ----------
+  // ---------- Main ----------
   try {
     const scrollable = pickOne(CFG.SELECTORS.scrollable);
     if (!scrollable) { err(TEXTS.notFoundScrollable); return; }
@@ -264,7 +248,7 @@
     const totalCount = parseIntSafe(countEl?.textContent);
 
     const tableHolder = pickOne(CFG.SELECTORS.table);
-    const tableEl = (function () {
+    const tableEl = (() => {
       if (!tableHolder) return null;
       if (tableHolder.tagName && tableHolder.tagName.toLowerCase() === 'table') return tableHolder;
       const tbl = tableHolder.querySelector('table');
