@@ -4,9 +4,27 @@
   // =========================
 
   const CFG = {
-    LIMIT: { MAX_ROWS: 500, MAX_FIELD_CHARS: 50_000, MAX_JSON_SCAN: 80_000, MAX_TOTAL_OUT: 500_000 },
-    OUTPUT: { HARD_INDENT: true, COL_SEP: '  ', WRAP_MARKDOWN: false },
-    UI: { Z: 999999, COLORS: { success: '#52c41a', error: '#ff4d4f', warn: '#faad14', info: '#3498db' }, DURATION: 2000 },
+    LIMIT: {
+      MAX_ROWS: 500,
+      MAX_FIELD_CHARS: 50_000,
+      MAX_JSON_SCAN: 80_000,
+      MAX_TOTAL_OUT: 500_000
+    },
+    OUTPUT: {
+      HARD_INDENT: true,
+      COL_SEP: '  ',
+      WRAP_MARKDOWN: false
+    },
+    UI: {
+      Z: 999999,
+      COLORS: {
+        success: '#52c41a',
+        error: '#ff4d4f',
+        warn: '#faad14',
+        info: '#3498db'
+      },
+      DURATION: 2000
+    },
   };
 
   const TEXTS = {
