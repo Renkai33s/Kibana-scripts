@@ -1,29 +1,27 @@
 (async () => {
-  // =========================
-  // Pretty-logs v2
-  // =========================
+  // =========================================================
+  // Pretty-logs v2  •  unified style
+  // =========================================================
+
+  const NS = 'Pretty-logs v2';
+  const state = (window[NS] ||= { timers: new Set() });
 
   const CFG = {
     LIMIT: {
       MAX_ROWS: 500,
       MAX_FIELD_CHARS: 50_000,
       MAX_JSON_SCAN: 80_000,
-      MAX_TOTAL_OUT: 500_000
+      MAX_TOTAL_OUT: 500_000,
     },
     OUTPUT: {
       HARD_INDENT: true,
       COL_SEP: '  ',
-      WRAP_MARKDOWN: false
+      WRAP_MARKDOWN: false,
     },
     UI: {
       Z: 999999,
-      COLORS: {
-        success: '#52c41a',
-        error: '#ff4d4f',
-        warn: '#faad14',
-        info: '#3498db'
-      },
-      DURATION: 2000
+      COLORS: { success: '#52c41a', error: '#ff4d4f', warn: '#faad14', info: '#3498db' },
+      DURATION: 2000,
     },
   };
 
@@ -35,57 +33,59 @@
     oops: 'Что-то пошло не так',
   };
 
-  // ---------- Уведомления ----------
-  function ensureNotif() {
-    if (window.__notifLogV32t) return window.__notifLogV32t;
+  // ---------- Notifications (unified) ----------
+  const createNotifier = (key) => {
+    if (window[key]) return window[key];
     const box = document.createElement('div');
     Object.assign(box.style, { position: 'fixed', bottom: '20px', right: '20px', zIndex: String(CFG.UI.Z), display: 'flex', flexDirection: 'column', gap: '8px' });
     document.body.appendChild(box);
-    window.__notifLogV32t = { box, current: null, timer: null };
-    return window.__notifLogV32t;
-  }
-  function notify(text, type = 'info', ms = CFG.UI.DURATION) {
-    const n = ensureNotif();
-    if (n.timer) { clearTimeout(n.timer); n.timer = null; }
-    if (n.current) { n.current.remove(); n.current = null; }
+    return (window[key] = { box, current: null, timer: null });
+  };
+  const notif = createNotifier('__notif_prettylogs');
+  const notify = (text, type = 'info', ms = CFG.UI.DURATION) => {
+    if (notif.timer) { clearTimeout(notif.timer); notif.timer = null; }
+    if (notif.current) { notif.current.remove(); notif.current = null; }
     const d = document.createElement('div');
-    d.setAttribute('role', 'status'); d.setAttribute('aria-live', 'polite');
+    d.setAttribute('role', 'status');
+    d.setAttribute('aria-live', 'polite');
     d.textContent = text;
     Object.assign(d.style, {
       padding: '10px 15px', borderRadius: '8px', background: CFG.UI.COLORS[type] || CFG.UI.COLORS.info,
       color: 'white', fontFamily: 'system-ui, sans-serif', fontSize: '14px', minWidth: '160px', textAlign: 'center',
-      boxShadow: '0 2px 6px rgba(0,0,0,0.2)'
+      boxShadow: '0 2px 6px rgba(0,0,0,0.2)',
     });
-    d.addEventListener('click', () => { if (n.timer) clearTimeout(n.timer); d.remove(); n.current = null; n.timer = null; });
-    n.box.appendChild(d); n.current = d;
-    n.timer = setTimeout(() => { if (n.current === d) { d.remove(); n.current = null; } n.timer = null; }, Math.max(300, ms | 0));
-  }
+    d.addEventListener('click', () => { if (notif.timer) clearTimeout(notif.timer); d.remove(); notif.current = null; notif.timer = null; });
+    notif.box.appendChild(d); notif.current = d;
+    notif.timer = setTimeout(() => { if (notif.current === d) { d.remove(); notif.current = null; } notif.timer = null; }, Math.max(300, ms | 0));
+  };
   const ok = (m) => notify(m, 'success');
   const err = (m) => notify(m, 'error');
 
-  // ---------- Текст/нормализация ----------
+  // ---------- Utils ----------
+  const sleep = (ms) => new Promise((r) => { const t = setTimeout(r, ms); state.timers.add(t); });
+  const clearAllTimers = () => { for (const t of state.timers) clearTimeout(t); state.timers.clear(); };
   const norm = (s) => (s ?? '').trim().replace(/\s+/g, ' ').toLowerCase();
   const isEmptyToken = (v) => {
     const t = (v ?? '').toString().trim().toLowerCase();
     return !t || t === '-' || t === '—' || t === '–' || t === 'n/a' || t === 'null' || t === 'undefined' || t === 'none';
   };
-  const protectLeadingSpaces = (s) => CFG.OUTPUT.HARD_INDENT ? s.replace(/^ +/gm, (m) => ' '.repeat(m.length)) : s;
+  const protectLeadingSpaces = (s) => (CFG.OUTPUT.HARD_INDENT ? s.replace(/^ +/gm, (m) => ' '.repeat(m.length)) : s);
 
-  // ---------- Колонки ----------
+  // ---------- Columns ----------
   const WANTED = ['Time', 'message.message', 'message.exception', 'Payload'];
   const WANTED_NORM = WANTED.map(norm);
 
   // ---------- JSON/XML prettify ----------
   const tryJSON = (s) => { try { return JSON.parse(s); } catch { return null; } };
-  function prettyWholeJson(text) {
+  const prettyWholeJson = (text) => {
     if (!text) return null;
     if (text.length > CFG.LIMIT.MAX_FIELD_CHARS) return null;
     const trimmed = text.trim();
     if (!/^[\[{]/.test(trimmed)) return null;
     const obj = tryJSON(trimmed);
     return obj != null ? JSON.stringify(obj, null, 2) : null;
-  }
-  function prettyJsonFragments(text) {
+  };
+  const prettyJsonFragments = (text) => {
     if (!text || text.length > CFG.LIMIT.MAX_JSON_SCAN) return null;
     let s = text, out = '', i = 0, changed = false;
     while (i < s.length) {
@@ -116,21 +116,21 @@
       i = j + 1;
     }
     return changed ? out : null;
-  }
-  function parseXmlSafe(xmlStr) {
+  };
+  const parseXmlSafe = (xmlStr) => {
     try {
       const doc = new DOMParser().parseFromString(xmlStr, 'text/xml');
       if (doc.getElementsByTagName('parsererror')[0]) return null;
       return new XMLSerializer().serializeToString(doc);
     } catch { return null; }
-  }
-  function indentXml(xmlStr) {
+  };
+  const indentXml = (xmlStr) => {
     let s = xmlStr
       .replace(/>\s+</g, '><')
       .replace(/(>)(<)(\/*)/g, '$1\n$2$3')
       .replace(/(\?>)(<)/g, '$1\n$2')
       .replace(/(--\>)(<)/g, '$1\n$2');
-    const lines = s.split('\n').map(l => l.trim()).filter(Boolean);
+    const lines = s.split('\n').map((l) => l.trim()).filter(Boolean);
     let indent = 0; const out = [];
     for (const line of lines) {
       const isClose = /^<\/[^>]+>/.test(line);
@@ -142,14 +142,14 @@
       if (!isClose && !isSelf && !isDecl && !isCmnt && /^<[^!?][^>]*>$/.test(line)) indent++;
     }
     return out.join('\n');
-  }
-  function prettyXmlWhole(text) {
+  };
+  const prettyXmlWhole = (text) => {
     if (!text) return null;
     if (text.length > CFG.LIMIT.MAX_FIELD_CHARS) return null;
     const normed = parseXmlSafe(text.trim());
     return normed ? indentXml(normed) : null;
-  }
-  function prettyXmlEmbedded(text) {
+  };
+  const prettyXmlEmbedded = (text) => {
     if (!text) return null;
     const maxScan = CFG.LIMIT.MAX_FIELD_CHARS;
     if (text.length > maxScan) return null;
@@ -168,8 +168,8 @@
       if (end - first < 32) break;
     }
     return null;
-  }
-  function prettyValue(raw, colName) {
+  };
+  const prettyValue = (raw, colName) => {
     let v = (raw ?? '').toString();
     if (norm(colName) === 'message.exception') v = (v.split(/\r?\n/)[0] || '').trim();
     if (isEmptyToken(v)) return '';
@@ -178,23 +178,25 @@
     const wholeX = prettyXmlWhole(v); if (wholeX !== null) return wholeX.trim();
     const embX = prettyXmlEmbedded(v); if (embX !== null) return embX.trim();
     return v.trim();
-  }
+  };
 
-  // ---------- Выделение ----------
+  // ---------- Selection & extraction ----------
   try {
     const selection = window.getSelection();
     if (!selection || selection.rangeCount === 0 || !selection.toString().trim()) { err(TEXTS.not_selected); return; }
+
     const range = selection.getRangeAt(0);
     const common = range.commonAncestorContainer.nodeType === 1
       ? range.commonAncestorContainer
       : range.commonAncestorContainer.parentElement;
+
     let table = common?.closest?.('table') || null;
     if (!table) {
       const allRowsGlob = Array.from(document.querySelectorAll('tbody tr, tr'));
-      const rowsInSel = allRowsGlob.filter(tr => selection.containsNode(tr, true));
+      const rowsInSel = allRowsGlob.filter((tr) => selection.containsNode(tr, true));
       if (rowsInSel.length) {
         const counts = new Map();
-        rowsInSel.forEach(tr => {
+        rowsInSel.forEach((tr) => {
           const t = tr.closest('table');
           if (t) counts.set(t, (counts.get(t) || 0) + 1);
         });
@@ -203,8 +205,7 @@
     }
     if (!table) { err(TEXTS.no_fields); return; }
 
-    // ---------- Индексы ----------
-    function buildIdxMapFromHeaders(headers) {
+    const buildIdxMapFromHeaders = (headers) => {
       const idxMap = new Map();
       const headersNorm = headers.map(norm);
       WANTED_NORM.forEach((wn, order) => {
@@ -212,17 +213,16 @@
         if (idx !== -1) idxMap.set(WANTED[order], idx);
       });
       return idxMap;
-    }
-    function getTableMap(tableEl) {
+    };
+    const getTableMap = (tableEl) => {
       const ths = tableEl.querySelectorAll('thead th, tr th');
       if (!ths.length) return null;
-      const headers = Array.from(ths).map(th => th.textContent || '');
+      const headers = Array.from(ths).map((th) => th.textContent || '');
       const idxMap = buildIdxMapFromHeaders(headers);
       return idxMap.size ? idxMap : null;
-    }
+    };
 
-    // ---------- Извлечение ----------
-    function extractFromRows(rows, getCells, idxMap) {
+    const extractFromRows = (rows, getCells, idxMap) => {
       const res = [];
       for (const row of rows.slice(0, CFG.LIMIT.MAX_ROWS)) {
         if (!selection.containsNode(row, true)) continue;
@@ -238,35 +238,37 @@
         if (vals.length) res.push(vals);
       }
       return res;
-    }
+    };
 
     const idxMap = getTableMap(table);
     if (!idxMap) { err(TEXTS.no_fields); return; }
-    const allRows = Array.from(table.querySelectorAll('tbody tr, tr'));
-    let rows = extractFromRows(allRows, tr => Array.from(tr.querySelectorAll('td, th')), idxMap);
 
+    const allRows = Array.from(table.querySelectorAll('tbody tr, tr'));
+    const rows = extractFromRows(allRows, (tr) => Array.from(tr.querySelectorAll('td, th')), idxMap);
     if (!rows.length) { err(TEXTS.no_fields); return; }
 
-    const lines = rows
-      .map(r => r.join(CFG.OUTPUT.COL_SEP).replace(/[ \t]+$/g, ''))
-      .filter(line => line.trim() !== '');
+    const lines = rows.map((r) => r.join(CFG.OUTPUT.COL_SEP).replace(/[ \t]+$/g, '')).filter((line) => line.trim() !== '');
     let out = protectLeadingSpaces(lines.join('\n'));
     if (out.length > CFG.LIMIT.MAX_TOTAL_OUT) out = out.slice(0, CFG.LIMIT.MAX_TOTAL_OUT) + '\n…';
     if (CFG.OUTPUT.WRAP_MARKDOWN) out = '```\n' + out + '\n```';
 
-    // ---------- Копирование ----------
-    async function copy(text) {
+    const copy = async (text) => {
       try {
         if (navigator.clipboard && window.isSecureContext) { await navigator.clipboard.writeText(text); return true; }
-        const ta = document.createElement('textarea'); ta.value = text; ta.style.position = 'fixed'; ta.style.top = '-1000px';
-        document.body.appendChild(ta); ta.focus(); ta.select(); const ok = document.execCommand('copy'); document.body.removeChild(ta); return ok;
+        const ta = document.createElement('textarea');
+        ta.value = text; ta.style.position = 'fixed'; ta.style.top = '-1000px';
+        document.body.appendChild(ta); ta.focus(); ta.select();
+        const ok = document.execCommand('copy'); document.body.removeChild(ta);
+        return ok;
       } catch { return false; }
-    }
+    };
 
     const copied = await copy(out);
     if (copied) ok(TEXTS.copy_ok); else { console.log(out); err(TEXTS.copy_fail); }
   } catch (e) {
     console.error('[Pretty-logs v2] error:', e);
     err(TEXTS.oops);
+  } finally {
+    clearAllTimers();
   }
 })();
