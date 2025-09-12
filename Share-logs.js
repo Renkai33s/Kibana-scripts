@@ -1,7 +1,7 @@
 (async () => {
-  // =========================
-  // Share-logs v2
-  // =========================
+  // =========================================================
+  // Share-logs v2  •  unified style
+  // =========================================================
 
   const NS = 'Share-logs v2';
   const state = (window[NS] ||= { timers: new Set(), running: false });
@@ -42,23 +42,22 @@
     oops: 'Что-то пошло не так',
   };
 
-  // ---------- Уведомления ----------
-  function ensureNotif() {
-    if (window.__notifShareV2) return window.__notifShareV2;
+  // ---------- Notifications (unified) ----------
+  const createNotifier = (key) => {
+    if (window[key]) return window[key];
     const box = document.createElement('div');
     Object.assign(box.style, {
       position: 'fixed', bottom: '20px', right: '20px',
       zIndex: String(CFG.UI.Z), display: 'flex',
-      flexDirection: 'column', gap: '8px'
+      flexDirection: 'column', gap: '8px',
     });
     document.body.appendChild(box);
-    window.__notifShareV2 = { box, current: null, timer: null };
-    return window.__notifShareV2;
-  }
-  function notify(text, type = 'info', ms = CFG.UI.DURATION) {
-    const n = ensureNotif();
-    if (n.timer) { clearTimeout(n.timer); n.timer = null; }
-    if (n.current) { n.current.remove(); n.current = null; }
+    return (window[key] = { box, current: null, timer: null });
+  };
+  const notif = createNotifier('__notif_sharelogs');
+  const notify = (text, type = 'info', ms = CFG.UI.DURATION) => {
+    if (notif.timer) { clearTimeout(notif.timer); notif.timer = null; }
+    if (notif.current) { notif.current.remove(); notif.current = null; }
     const d = document.createElement('div');
     d.setAttribute('role', 'status');
     d.setAttribute('aria-live', 'polite');
@@ -70,29 +69,25 @@
       fontSize: '14px', minWidth: '160px', textAlign: 'center',
       boxShadow: '0 2px 6px rgba(0,0,0,0.2)', userSelect: 'none', cursor: 'pointer',
     });
-    d.addEventListener('click', () => { if (n.timer) clearTimeout(n.timer); d.remove(); n.current = null; n.timer = null; });
-    n.box.appendChild(d); n.current = d;
-    n.timer = setTimeout(() => { if (n.current === d) { d.remove(); n.current = null; } n.timer = null; }, Math.max(300, ms | 0));
-  }
+    d.addEventListener('click', () => { if (notif.timer) clearTimeout(notif.timer); d.remove(); notif.current = null; notif.timer = null; });
+    notif.box.appendChild(d); notif.current = d;
+    notif.timer = setTimeout(() => { if (notif.current === d) { d.remove(); notif.current = null; } notif.timer = null; }, Math.max(300, ms | 0));
+  };
   const ok = (m) => notify(m, 'success');
   const err = (m) => notify(m, 'error');
   const warn = (m) => notify(m, 'warn');
 
-  // ---------- Утилиты ----------
-  const sleep = (ms) => new Promise(r => { const t = setTimeout(r, ms); state.timers.add(t); });
-  function clearAllTimers() { for (const t of state.timers) clearTimeout(t); state.timers.clear(); }
+  // ---------- Utils (unified) ----------
+  const sleep = (ms) => new Promise((r) => { const t = setTimeout(r, ms); state.timers.add(t); });
+  const clearAllTimers = () => { for (const t of state.timers) clearTimeout(t); state.timers.clear(); };
   const qs = (sel, root = document) => { try { return root.querySelector(sel); } catch { return null; } };
   const qsa = (sel, root = document) => { try { return Array.from(root.querySelectorAll(sel)); } catch { return []; } };
-  function pickOne(cands, root = document) { for (const s of cands || []) { const el = qs(s, root); if (el) return el; } return null; }
+  const pickOne = (cands, root = document) => { for (const s of cands || []) { const el = qs(s, root); if (el) return el; } return null; };
   const isVisible = (el) => !!(el && el.offsetParent !== null);
-  function clickSafe(el) {
-    if (!el) return;
-    try { el.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, composed: true })); }
-    catch { el.click?.(); }
-  }
+  const clickSafe = (el) => { if (!el) return; try { el.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, composed: true })); } catch { el.click?.(); } };
 
-  // ---------- Чистка savedSearch ----------
-  (function cleanSavedSearchInPlace() {
+  // ---------- Clean savedSearch in-place ----------
+  (() => {
     try {
       const url = window.location.href;
       const cleanUrl = url.replace(/,savedSearch:'[^']*'/, '');
@@ -107,17 +102,17 @@
   state.running = true;
 
   try {
-    // 1) Находим Share
-    function findShareButton() {
+    // 1) Find Share
+    const findShareButton = () => {
       const el = pickOne(CFG.SELECTORS.shareButton);
       return isVisible(el) ? el : null;
-    }
+    };
     const shareBtn = findShareButton();
     if (!shareBtn) { err(TEXTS.share_not_found); return; }
     clickSafe(shareBtn);
 
-    // 2) Ждём диалог Share и ключевые элементы внутри него
-    async function waitForShareDialog(timeoutMs = CFG.TIMEOUT) {
+    // 2) Wait for dialog
+    const waitForShareDialog = async (timeoutMs = CFG.TIMEOUT) => {
       const t0 = Date.now();
       while (Date.now() - t0 < timeoutMs) {
         const dlg = pickOne(CFG.SELECTORS.shareDialog);
@@ -125,27 +120,27 @@
         await sleep(CFG.POLL);
       }
       return null;
-    }
+    };
     const dialog = await waitForShareDialog();
     if (!dialog) { err(TEXTS.panel_not_ready); return; }
 
-    function findShortToggle(root) {
+    const findShortToggle = (root) => {
       const btn = pickOne(CFG.SELECTORS.shortToggle, root);
-      return (btn && isVisible(btn)) ? btn : null;
-    }
-    function findCopyButton(root) {
+      return btn && isVisible(btn) ? btn : null;
+    };
+    const findCopyButton = (root) => {
       const el = pickOne(CFG.SELECTORS.copyButton, root);
-      return (el && isVisible(el)) ? el : null;
-    }
-    function getUrlFromPanel(root) {
+      return el && isVisible(el) ? el : null;
+    };
+    const getUrlFromPanel = (root) => {
       const inp = pickOne(CFG.SELECTORS.urlField, root);
       if (!inp || !isVisible(inp)) return '';
       const v = (inp.value ?? inp.getAttribute?.('value') ?? inp.textContent ?? '').toString().trim();
       return v.startsWith('http') ? v : '';
-    }
+    };
 
-    // 3) Включаем Short URL (если опция выключена)
-    async function enableShortIfPossible(root) {
+    // 3) Enable Short (optional)
+    const enableShortIfPossible = async (root) => {
       if (!CFG.FEATURES.TRY_ENABLE_SHORT) return true;
       const btn = findShortToggle(root);
       if (!btn) { warn(TEXTS.short_not_found); return false; }
@@ -157,16 +152,15 @@
         await sleep(CFG.POLL);
       }
       return true;
-    }
+    };
     await enableShortIfPossible(dialog);
 
-    // 4) Копируем URL
-    async function copyToClipboard(text) {
-      try {
-        if (navigator.clipboard && window.isSecureContext) { await navigator.clipboard.writeText(text); return true; }
-      } catch {}
+    // 4) Copy URL
+    const copyToClipboard = async (text) => {
+      try { if (navigator.clipboard && window.isSecureContext) { await navigator.clipboard.writeText(text); return true; } }
+      catch {}
       return false;
-    }
+    };
 
     let copied = false;
     if (CFG.FEATURES.TRY_COPY_DIRECT) {
@@ -183,7 +177,7 @@
       notify(TEXTS.copied_button, 'success', 1400);
     }
 
-    // 5) Закрываем диалог
+    // 5) Close dialog
     if (CFG.FEATURES.CLOSE_BEHAVIOR === 'escape') {
       document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', keyCode: 27, which: 27, bubbles: true }));
     } else if (CFG.FEATURES.CLOSE_BEHAVIOR === 'toggle') {
