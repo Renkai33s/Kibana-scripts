@@ -3,7 +3,7 @@
   // Auto-trace v2
   // =========================
 
-  const NS = '__traceHelperV3';
+  const NS = 'Auto-trace v2';
   const state = (window[NS] ||= {
     timers: new Set(),
     progress: null,
