@@ -3,7 +3,7 @@
   // Share-logs v2
   // =========================
 
-  const NS = '__shareShortHelperV2';
+  const NS = 'Share-logs v2';
   const state = (window[NS] ||= { timers: new Set(), running: false });
 
   const CFG = {
