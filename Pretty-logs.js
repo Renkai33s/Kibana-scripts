@@ -1,6 +1,6 @@
 (async () => {
   // =========================================================
-  // Pretty-logs v2  • unified style  (headers-skip fix)
+  // Pretty-logs v2  • unified style
   // =========================================================
 
   const NS = 'Pretty-logs v2';
