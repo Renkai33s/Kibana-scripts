@@ -401,12 +401,18 @@
 
     const copied = await copy(out);
     if (copied) {
-      if (truncatedByGlobalLimit) {
-        ok(TEXTS.scroll_limit_rows(ROWS_LIMIT));
-      } else if (hasSelection) {
+      const hitWindowLimit = rows.length >= ROWS_LIMIT;
+      const hitHardMax = rows.length >= CFG.LIMIT.MAX_ROWS;
+
+      if (hasSelection) {
         ok(TEXTS.copy_ok);
-      } else if (scrollInfo.used) {
+
+      } else if (scrollInfo.reason === 'manual') {
         ok(TEXTS.scroll_stopped_rows(rows.length));
+
+      } else if (truncatedByGlobalLimit || hitWindowLimit || hitHardMax || scrollInfo.reason === 'scroll_limit') {
+        ok(TEXTS.scroll_limit_rows(rows.length));
+
       } else {
         ok(TEXTS.not_selected_all);
       }
