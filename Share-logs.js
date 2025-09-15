@@ -15,9 +15,9 @@
       DURATION: 2000,
     },
     FEATURES: {
-      TRY_ENABLE_SHORT: true,   // включать Short URL, если доступно
-      TRY_COPY_DIRECT: true,    // пытаться копировать прямо из поля URL
-      CLOSE_BEHAVIOR: 'escape', // 'none' | 'escape' | 'toggle'
+      TRY_ENABLE_SHORT: true,
+      TRY_COPY_DIRECT: true,
+      CLOSE_BEHAVIOR: 'escape',
     },
     SELECTORS: {
       shareButton: ['[data-test-subj="shareTopNavButton"]'],
@@ -89,14 +89,39 @@
   // ---------- Clean savedSearch in-place ----------
   (() => {
     try {
-      const url = window.location.href;
-      const cleanUrl = url.replace(/,savedSearch:'[^']*'/, '');
-      if (cleanUrl !== url) {
-        history.replaceState(null, '', cleanUrl);
+      const removeSavedSearch = (s) => {
+        let prev;
+        do {
+          prev = s;
+          s = s
+            .replace(/,savedSearch:(?:'[^']*'|[^,()]+)/, '')
+            .replace(/savedSearch:(?:'[^']*'|[^,()]+),/, '')
+            .replace(/%2CsavedSearch:(?:'[^']*'|[^,%29]+)/i, '')
+            .replace(/savedSearch:(?:'[^']*'|[^,%29]+)%2C/i, '');
+        } while (s !== prev);
+        return s;
+      };
+
+      const { href, hash } = window.location;
+      if (!hash) return;
+
+      const base = href.split('#')[0] + '#';
+      const raw = hash;
+      const dec = decodeURIComponent(hash);
+
+      let cleaned = removeSavedSearch(raw);
+      if (cleaned === raw) {
+        const cleanedDec = removeSavedSearch(dec);
+        if (cleanedDec !== dec) cleaned = encodeURIComponent(cleanedDec);
+      }
+
+      if (cleaned !== raw) {
+        history.replaceState(null, '', base + cleaned.replace(/^#/, ''));
         notify(TEXTS.url_cleaned, 'info', 1200);
       }
     } catch {}
   })();
+
 
   if (state.running) return;
   state.running = true;
