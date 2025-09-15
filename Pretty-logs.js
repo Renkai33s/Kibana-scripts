@@ -1,6 +1,6 @@
 (async () => {
   // =========================================================
-  // Pretty-logs v2  • unified style
+  // Pretty-logs v2  • unified style  (headers-skip fix)
   // =========================================================
 
   const NS = 'Pretty-logs v2';
@@ -252,8 +252,14 @@
     const any = Array.from(document.querySelectorAll('table')).find((t) => t && t.offsetParent !== null);
     return any || null;
   };
-  const getAllRows = (table) => Array.from(table.querySelectorAll('tbody tr, tr'));
-  const getCells = (tr) => Array.from(tr.querySelectorAll('td, th'));
+
+  const getAllRows = (table) => {
+    const rows = Array.from(table.querySelectorAll('tbody tr'));
+    if (rows.length) return rows;
+    return Array.from(table.querySelectorAll('tr')).filter((tr) => !tr.closest('thead'));
+  };
+
+  const getCells = (tr) => Array.from(tr.querySelectorAll('td'));
 
   // ---------- Scroll collect ----------
   const collectWithScroll = async (tableEl, totalTarget = Infinity) => {
@@ -360,9 +366,13 @@
 
     for (let i = 0; i < allRows.length && rows.length < ROWS_LIMIT && rows.length < CFG.LIMIT.MAX_ROWS; i++) {
       const row = allRows[i];
+
+      if (row.closest('thead')) continue;
+      const cells = getCells(row);
+      if (!cells.length) continue;
+
       if (hasSelection && !selection.containsNode(row, true)) continue;
 
-      const cells = getCells(row);
       const vals = [];
       for (const wantedName of WANTED) {
         const colIdx = idxMap.get(wantedName);
