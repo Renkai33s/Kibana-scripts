@@ -36,13 +36,24 @@
     },
   };
 
+  // ---------- Pluralization (ru) ----------
+  const ruPlural = (n, one, few, many) => {
+    const mod10 = n % 10, mod100 = n % 100;
+    if (mod10 === 1 && mod100 !== 11) return one;
+    if (mod10 >= 2 && mod10 <= 4 && (mod100 < 12 || mod100 > 14)) return few;
+    return many;
+  };
+  const rowsWord = (n) => `${n} ${ruPlural(n, 'строка', 'строки', 'строк')}`;
+  const ruVerbCopied = (n) => ruPlural(n, 'скопирована', 'скопированы', 'скопировано');
+  const copiedPhrase = (n) => `${ruVerbCopied(n)} ${rowsWord(n)}`;
+
   const TEXTS = {
     no_fields: 'Таблица не найдена',
     copy_fail: 'Не удалось скопировать',
-    copy_ok: 'Логи выделены, скопированы только они',
-    not_selected_all: 'Логи не выделены, скопированы все',
-    scroll_stopped_rows: (n) => `Скролл остановлен, скопированы первые ${n} строк`,
-    scroll_limit_rows: (n) => `Достигнут лимит в ${n} строк, скопированы только они`,
+    copy_ok:     (n) => `Логи выделены, ${copiedPhrase(n)}`,
+    not_selected_all: (n) => `Логи не выделены, ${copiedPhrase(n)}`,
+    scroll_stopped_rows: (n) => `Скролл остановлен, ${copiedPhrase(n)}`,
+    scroll_limit_rows:   (n) => `Достигнут лимит, ${copiedPhrase(n)}`,
     oops: 'Что-то пошло не так',
   };
 
@@ -211,12 +222,12 @@
       fontFamily: 'system-ui, sans-serif', fontSize: '14px', zIndex: String(CFG.UI.Z),
       display: 'flex', alignItems: 'center', gap: '8px',
     });
-    const textEl = document.createElement('div'); textEl.textContent = '0 строк';
+    const textEl = document.createElement('div'); textEl.textContent = rowsWord(0);
     const btn = document.createElement('button'); btn.textContent = '×';
     Object.assign(btn.style, { fontSize: '12px', cursor: 'pointer', border: 'none', borderRadius: '4px', padding: '0 6px', background: 'white', color: CFG.UI.COLORS.info });
     box.appendChild(textEl); box.appendChild(btn); document.body.appendChild(box);
     const api = {
-      update(v) { textEl.textContent = `${v} строк`; },
+      update(v) { textEl.textContent = rowsWord(v); },
       remove() { box.remove(); state.progress = null; },
       onStop(h) { btn.addEventListener('click', h, { once: true }); },
     };
@@ -405,16 +416,13 @@
       const hitHardMax = rows.length >= CFG.LIMIT.MAX_ROWS;
 
       if (hasSelection) {
-        ok(TEXTS.copy_ok);
-
+        ok(TEXTS.copy_ok(rows.length));
       } else if (scrollInfo.reason === 'manual') {
         ok(TEXTS.scroll_stopped_rows(rows.length));
-
       } else if (truncatedByGlobalLimit || hitWindowLimit || hitHardMax || scrollInfo.reason === 'scroll_limit') {
         ok(TEXTS.scroll_limit_rows(rows.length));
-
       } else {
-        ok(TEXTS.not_selected_all);
+        ok(TEXTS.not_selected_all(rows.length));
       }
     } else {
       console.log(out);
