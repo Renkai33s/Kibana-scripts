@@ -9,6 +9,7 @@
     progress: null,
     didScrollDown: false,
     stop: false,
+    _suppressNextNotify: false,
   });
 
   const CFG = {
@@ -31,17 +32,17 @@
   };
 
   const TEXTS = {
-    notFoundScrollable: 'Элемент для прокрутки не найден',
+    notFoundScrollable: 'Скролл не найден',
     notFoundTable: 'Таблица не найдена',
     notFoundTraces: 'Трейсы не найдены',
-    notFoundBtn: 'Кнопка для открытия трейсов не найдена',
-    limitHit: (n) => `Достигнут лимит в ${n} трейсов`,
-    tracesInserted: 'Трейсы подставлены',
+    limitHit: (n) => `Трейс не выделен, подставлены первые ${n}`,
+    tracesInserted: 'Трейс не выделен, подставлены все',
+    selectedInserted: 'Трейс выделен, подставлен только он',
+    scrollStopped: (n) => `Скролл остановлен, подставлено ${n} трейсов`,
     genericOops: 'Что-то пошло не так',
-    cannotDetectCount: 'Не удалось определить количество трейсов',
   };
 
-  // ---------- Notifications (unified) ----------
+  // ---------- Notifications ----------
   const createNotifier = (key) => {
     if (window[key]) return window[key];
     const box = document.createElement('div');
@@ -72,12 +73,10 @@
   };
   const ok = (m) => notify(m, 'success');
   const err = (m) => notify(m, 'error');
-  const warn = (m) => notify(m, 'warn');
-  const info = (m) => notify(m, 'info');
 
-  // ---------- Utils (unified) ----------
+  // ---------- Utils ----------
   const qs = (sel, root = document) => { try { return root.querySelector(sel); } catch { return null; } };
-  const pickOne = (cands, root = document) => { for (const s of cands || []) { const el = qs(s, root); if (el) return el; } return null; };
+  const pickOne = (cands, root = document) => { for (const s of (cands || [])) { const el = qs(s, root); if (el) return el; } return null; };
   const parseIntSafe = (t) => { if (!t) return 0; const n = parseInt(String(t).replace(/[^0-9]/g, ''), 10); return Number.isFinite(n) ? n : 0; };
   const sleep = (ms) => new Promise((r) => { const t = setTimeout(() => { state.timers.delete(t); r(); }, ms); state.timers.add(t); });
   const clearAllTimers = () => { for (const t of state.timers) clearTimeout(t); state.timers.clear(); };
@@ -171,6 +170,30 @@
     } catch { return false; }
   };
 
+  // ---------- Trace extraction helpers ----------
+  const RE_HEX_LONG = /\b[0-9a-f]{16,64}\b/i;
+  const RE_UUID = /\b[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\b/i;
+
+  const extractTraceFromText = (text) => {
+    if (!text) return null;
+    const t = String(text).trim();
+    const m1 = t.match(RE_HEX_LONG);
+    if (m1) return m1[0];
+    const m2 = t.match(RE_UUID);
+    if (m2) return m2[0];
+    return null;
+  };
+
+  const getSelectedTraceStrict = () => {
+    try {
+      const sel = window.getSelection?.();
+      if (!sel || sel.isCollapsed) return null;
+      const raw = sel.toString().slice(0, 512);
+      const trace = extractTraceFromText(raw);
+      return trace || null;
+    } catch { return null; }
+  };
+
   // ---------- Table & extraction ----------
   const getTraceColumnIndex = (tableEl) => {
     const headerCells = Array.from(tableEl?.tHead?.rows?.[0]?.cells || []);
@@ -188,7 +211,8 @@
     const rows = tableEl.querySelectorAll('tbody tr');
     for (const row of rows) {
       const cell = row.children[traceIdx];
-      const val = (cell?.innerText || cell?.textContent || '').trim();
+      const valRaw = (cell?.innerText || cell?.textContent || '').trim();
+      const val = extractTraceFromText(valRaw) || valRaw;
       if (val && val !== '-' && !seen.has(val)) {
         seen.add(val); traces.push(val);
         if (traces.length >= limit) break;
@@ -204,7 +228,7 @@
     for (const sel of CFG.SELECTORS.popoverTraceItems) {
       const nodes = Array.from(pop.querySelectorAll(sel)).filter((el) => el && el.offsetParent !== null);
       for (const el of nodes) {
-        const v = (el.innerText || el.textContent || '').trim();
+        const v = extractTraceFromText(el.getAttribute?.('title') || el.innerText || el.textContent || '');
         if (v && !seen.has(v)) seen.add(v);
       }
       if (seen.size) return Array.from(seen);
@@ -213,7 +237,7 @@
   };
 
   // ---------- Insert & run ----------
-  const insertAndRun = async (traces, { notifyLimitIfCut = false } = {}) => {
+  const insertAndRun = async (traces, { notifyLimitIfCut = false, msgOverride = null } = {}) => {
     const uniq = Array.from(new Set(Array.isArray(traces) ? traces : []));
     if (uniq.length === 0) { err(TEXTS.notFoundTraces); return; }
     let payload = uniq;
@@ -238,7 +262,17 @@
       input.blur?.();
       document.body.focus?.();
     }
-    if (notifyLimitIfCut && uniq.length >= CFG.LIMIT) ok(TEXTS.limitHit(CFG.LIMIT)); else ok(TEXTS.tracesInserted);
+
+    if (state._suppressNextNotify) {
+      state._suppressNextNotify = false;
+    } else if (msgOverride) {
+      ok(msgOverride);
+    } else if (notifyLimitIfCut && uniq.length >= CFG.LIMIT) {
+      ok(TEXTS.limitHit(CFG.LIMIT));
+    } else {
+      ok(TEXTS.tracesInserted);
+    }
+
     if (state.didScrollDown) scrollTop0();
   };
 
@@ -249,7 +283,13 @@
 
     const prog = showProgress();
     state.stop = false;
-    prog.onStop(() => { state.stop = true; prog.remove(); });
+    prog.onStop(() => {
+      state.stop = true;
+      const traces = getTracesFromTable(tableEl, traceIdx);
+      ok(TEXTS.scrollStopped(traces.length));
+      state._suppressNextNotify = true;
+      prog.remove();
+    });
 
     let last = -1, stable = 0;
     for (let i = 0; i < 600; i++) {
@@ -274,6 +314,13 @@
 
   // ---------- Main ----------
   try {
+    const selectedTrace = getSelectedTraceStrict();
+    if (selectedTrace) {
+      await insertAndRun([selectedTrace], { msgOverride: TEXTS.selectedInserted });
+      try { const sel = window.getSelection?.(); sel?.removeAllRanges?.(); } catch {}
+      return;
+    }
+
     const scrollable = pickOne(CFG.SELECTORS.scrollable);
     if (!scrollable) { err(TEXTS.notFoundScrollable); return; }
 
