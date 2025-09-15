@@ -1,6 +1,6 @@
 (async () => {
   // =========================================================
-  // Auto-trace v2  •  unified style (with pluralized counts)
+  // Auto-trace v2  •  unified style
   // =========================================================
 
   const NS = 'Auto-trace v2';
@@ -31,26 +31,26 @@
     },
   };
 
-  // ---------- Языковые хелперы (RU склонение) ----------
-  const ruNoun = (n, forms) => {
-    const abs = Math.abs(n) % 100;
-    const last = abs % 10;
-    if (abs > 10 && abs < 20) return forms[2];
-    if (last > 1 && last < 5) return forms[1];
-    if (last === 1) return forms[0];
-    return forms[2];
+  // ---------- RU plural + single phrase ----------
+  const ruPlural = (n, one, few, many) => {
+    const abs = Math.abs(n), mod10 = abs % 10, mod100 = abs % 100;
+    if (mod10 === 1 && mod100 !== 11) return one;
+    if (mod10 >= 2 && mod10 <= 4 && (mod100 < 12 || mod100 > 14)) return few;
+    return many;
   };
-  const tracesWord = (n) => ruNoun(n, ['трейс', 'трейса', 'трейсов']);
-  const tracesCount = (n) => `${n} ${tracesWord(n)}`;
+  const tracesWord = (n) => ruPlural(n, 'трейс', 'трейса', 'трейсов');
+  const insertedVerb = (n) => ruPlural(n, 'подставлен', 'подставлены', 'подставлены');
+  const insertedPhrase = (n) => `${insertedVerb(n)} ${n} ${tracesWord(n)}`; // <— единая «фраза после запятой»
+  const countWord = (n) => `${n} ${tracesWord(n)}`;
 
   const TEXTS = {
     notFoundScrollable: 'Скролл не найден',
     notFoundTable: 'Таблица не найдена',
     notFoundTraces: 'Трейсы не найдены',
-    selectedInserted: (n) => `Трейс выделен, подставлен ${tracesCount(n)}`,
-    tracesInserted:  (n) => `Трейс не выделен, подставлено ${tracesCount(n)}`,
-    scrollStopped:   (n) => `Скролл остановлен, подставлены первые ${tracesCount(n)}`,
-    limitHit:        (n) => `Достигнут лимит в ${tracesCount(n)}, подставлены только они`,
+    selectedInserted:   (n) => `Трейс выделен, ${insertedPhrase(n)}`,
+    tracesInserted:     (n) => `Трейс не выделен, ${insertedPhrase(n)}`,
+    scrollStopped:      (n) => `Скролл остановлен, ${insertedPhrase(n)}`,
+    limitHit:           (n) => `Достигнут лимит, ${insertedPhrase(n)}`,
     genericOops: 'Что-то пошло не так',
   };
 
@@ -139,12 +139,12 @@
       fontFamily: 'system-ui, sans-serif', fontSize: '14px', zIndex: String(CFG.UI.Z),
       display: 'flex', alignItems: 'center', gap: '8px',
     });
-    const textEl = document.createElement('div'); textEl.textContent = tracesCount(0);
+    const textEl = document.createElement('div'); textEl.textContent = countWord(0);
     const btn = document.createElement('button'); btn.textContent = '×';
     Object.assign(btn.style, { fontSize: '12px', cursor: 'pointer', border: 'none', borderRadius: '4px', padding: '0 6px', background: 'white', color: CFG.UI.COLORS.info });
     box.appendChild(textEl); box.appendChild(btn); document.body.appendChild(box);
     const api = {
-      update(v) { const n = Math.min(v, CFG.LIMIT); textEl.textContent = tracesCount(n); },
+      update(v) { const n = Math.min(v, CFG.LIMIT); textEl.textContent = countWord(n); },
       remove() { box.remove(); state.progress = null; },
       onStop(h) { btn.addEventListener('click', h, { once: true }); },
     };
@@ -309,7 +309,8 @@
     for (let i = 0; i < 600; i++) {
       if (state.stop) return getTracesFromTable(tableEl, traceIdx);
 
-      scrollable.scrollTop = scrollable.scrollHeight;
+      const container = pickOne(CFG.SELECTORS.scrollable);
+      container.scrollTop = container.scrollHeight;
       state.didScrollDown = true;
 
       const traces = getTracesFromTable(tableEl, traceIdx);
@@ -322,7 +323,7 @@
 
       await sleep(100);
     }
-    prog.remove();
+    try { prog.remove(); } catch {}
     return getTracesFromTable(tableEl, traceIdx);
   };
 
