@@ -18,7 +18,7 @@
       MAX_JSON_SCAN: 80_000,
       MAX_TOTAL_OUT: 500_000,
     },
-    SCROLL_LIMIT_ROWS: 200, // <-- лимит строк для автоскролла
+    SCROLL_LIMIT_ROWS: 200,
     OUTPUT: {
       HARD_INDENT: true,
       COL_SEP: '  ',
@@ -317,7 +317,6 @@
     const selection = window.getSelection?.();
     const hasSelection = !!(selection && selection.rangeCount && selection.toString().trim());
 
-    // Находим таблицу: либо вокруг выделения, либо главную
     let table = null;
     if (hasSelection) {
       const range = selection.getRangeAt(0);
@@ -341,11 +340,9 @@
     if (!table) table = getMainTable();
     if (!table) { err(TEXTS.no_fields); return; }
 
-    // Карта колонок
     const idxMap = getTableMap(table);
     if (!idxMap) { err(TEXTS.no_fields); return; }
 
-    // Если выделения нет — возможно нужно проскроллить, чтобы собрать всё (но не больше лимита)
     let scrollInfo = { used: false, reason: 'none' };
     let totalCount = 0;
     if (!hasSelection) {
@@ -356,11 +353,15 @@
       }
     }
 
-    // Извлекаем строки
+    const ROWS_LIMIT = CFG.SCROLL_LIMIT_ROWS;
     const allRows = getAllRows(table);
     const rows = [];
-    for (const row of allRows.slice(0, CFG.LIMIT.MAX_ROWS)) {
+    let truncatedByGlobalLimit = false;
+
+    for (let i = 0; i < allRows.length && rows.length < ROWS_LIMIT && rows.length < CFG.LIMIT.MAX_ROWS; i++) {
+      const row = allRows[i];
       if (hasSelection && !selection.containsNode(row, true)) continue;
+
       const cells = getCells(row);
       const vals = [];
       for (const wantedName of WANTED) {
@@ -371,27 +372,31 @@
         if (!isEmptyToken(val)) vals.push(val);
       }
       if (vals.length) rows.push(vals);
-      if (rows.length >= CFG.LIMIT.MAX_ROWS) break;
     }
+
+    if (!hasSelection) {
+      truncatedByGlobalLimit = allRows.length > rows.length && rows.length >= ROWS_LIMIT;
+    } else {
+      truncatedByGlobalLimit = rows.length >= ROWS_LIMIT;
+    }
+
     if (!rows.length) { err(TEXTS.no_fields); return; }
 
-    // Формируем вывод
-    const lines = rows.map((r) => r.join(CFG.OUTPUT.COL_SEП).replace(/[ \t]+$/g, '')).filter((line) => line.trim() !== '');
+    const lines = rows
+      .map((r) => r.join(CFG.OUTPUT.COL_SEP).replace(/[ \t]+$/g, ''))
+      .filter((line) => line.trim() !== '');
     let out = protectLeadingSpaces(lines.join('\n'));
     if (out.length > CFG.LIMIT.MAX_TOTAL_OUT) out = out.slice(0, CFG.LIMIT.MAX_TOTAL_OUT) + '\n…';
     if (CFG.OUTPUT.WRAP_MARKDOWN) out = '```\n' + out + '\n```';
 
-    // Копируем
     const copied = await copy(out);
     if (copied) {
-      if (hasSelection) {
+      if (truncatedByGlobalLimit) {
+        ok(TEXTS.scroll_limit_rows(ROWS_LIMIT));
+      } else if (hasSelection) {
         ok(TEXTS.copy_ok);
       } else if (scrollInfo.used) {
-        if (scrollInfo.reason === 'scroll_limit') {
-          ok(TEXTS.scroll_limit_rows(rows.length));
-        } else {
-          ok(TEXTS.scroll_stopped_rows(rows.length));
-        }
+        ok(TEXTS.scroll_stopped_rows(rows.length));
       } else {
         ok(TEXTS.not_selected_all);
       }
