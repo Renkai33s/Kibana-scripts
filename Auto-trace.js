@@ -1,6 +1,6 @@
 (async () => {
   // =========================================================
-  // Auto-trace v2  •  unified style
+  // Auto-trace v2  •  unified style (with pluralized counts)
   // =========================================================
 
   const NS = 'Auto-trace v2';
@@ -31,14 +31,26 @@
     },
   };
 
+  // ---------- Языковые хелперы (RU склонение) ----------
+  const ruNoun = (n, forms) => {
+    const abs = Math.abs(n) % 100;
+    const last = abs % 10;
+    if (abs > 10 && abs < 20) return forms[2];
+    if (last > 1 && last < 5) return forms[1];
+    if (last === 1) return forms[0];
+    return forms[2];
+  };
+  const tracesWord = (n) => ruNoun(n, ['трейс', 'трейса', 'трейсов']);
+  const tracesCount = (n) => `${n} ${tracesWord(n)}`;
+
   const TEXTS = {
     notFoundScrollable: 'Скролл не найден',
     notFoundTable: 'Таблица не найдена',
     notFoundTraces: 'Трейсы не найдены',
-    selectedInserted: 'Трейс выделен, подставлен только он',
-    tracesInserted: 'Трейс не выделен, подставлены все',
-    scrollStopped: (n) => `Скролл остановлен, подставлены первые ${n} трейсов`,
-    limitHit: (n) => `Достигнут лимит в ${n} трейсов, подставлены только они`,
+    selectedInserted: (n) => `Трейс выделен, подставлен ${tracesCount(n)}`,
+    tracesInserted:  (n) => `Трейс не выделен, подставлено ${tracesCount(n)}`,
+    scrollStopped:   (n) => `Скролл остановлен, подставлены первые ${tracesCount(n)}`,
+    limitHit:        (n) => `Достигнут лимит в ${tracesCount(n)}, подставлены только они`,
     genericOops: 'Что-то пошло не так',
   };
 
@@ -127,12 +139,12 @@
       fontFamily: 'system-ui, sans-serif', fontSize: '14px', zIndex: String(CFG.UI.Z),
       display: 'flex', alignItems: 'center', gap: '8px',
     });
-    const textEl = document.createElement('div'); textEl.textContent = '0 трейсов';
+    const textEl = document.createElement('div'); textEl.textContent = tracesCount(0);
     const btn = document.createElement('button'); btn.textContent = '×';
     Object.assign(btn.style, { fontSize: '12px', cursor: 'pointer', border: 'none', borderRadius: '4px', padding: '0 6px', background: 'white', color: CFG.UI.COLORS.info });
     box.appendChild(textEl); box.appendChild(btn); document.body.appendChild(box);
     const api = {
-      update(v) { textEl.textContent = `${Math.min(v, CFG.LIMIT)} трейсов`; },
+      update(v) { const n = Math.min(v, CFG.LIMIT); textEl.textContent = tracesCount(n); },
       remove() { box.remove(); state.progress = null; },
       onStop(h) { btn.addEventListener('click', h, { once: true }); },
     };
@@ -263,14 +275,16 @@
       document.body.focus?.();
     }
 
+    const count = payload.length;
+
     if (state._suppressNextNotify) {
       state._suppressNextNotify = false;
     } else if (msgOverride) {
-      ok(msgOverride);
+      ok(typeof msgOverride === 'function' ? msgOverride(count) : msgOverride);
     } else if (notifyLimitIfCut && uniq.length >= CFG.LIMIT) {
-      ok(TEXTS.limitHit(CFG.LIMIT));
+      ok(TEXTS.limitHit(count));
     } else {
-      ok(TEXTS.tracesInserted);
+      ok(TEXTS.tracesInserted(count));
     }
 
     if (state.didScrollDown) scrollTop0();
