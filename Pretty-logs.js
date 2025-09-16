@@ -11,6 +11,10 @@
     stop: false,
   });
 
+  // ---------- NBSP-based indentation ----------
+  const NBSP   = '\u00A0';
+  const INDENT = NBSP + NBSP;
+
   const CFG = {
     LIMIT: {
       MAX_ROWS: 500,
@@ -21,7 +25,7 @@
     SCROLL_LIMIT_ROWS: 200,
     OUTPUT: {
       HARD_INDENT: true,
-      COL_SEP: '  ',
+      COL_SEP: INDENT,
       WRAP_MARKDOWN: false,
     },
     UI: {
@@ -94,7 +98,7 @@
     const t = (v ?? '').toString().trim().toLowerCase();
     return !t || t === '-' || t === '—' || t === '–' || t === 'n/a' || t === 'null' || t === 'undefined' || t === 'none';
   };
-  const protectLeadingSpaces = (s) => (CFG.OUTPUT.HARD_INDENT ? s.replace(/^ +/gm, (m) => ' '.repeat(m.length)) : s);
+  const protectLeadingSpaces = (s) => (CFG.OUTPUT.HARD_INDENT ? s : s);
   const qs = (sel, root = document) => { try { return root.querySelector(sel); } catch { return null; } };
   const pickOne = (cands, root = document) => { for (const s of (cands || [])) { const el = qs(s, root); if (el) return el; } return null; };
   const scrollTop0 = () => {
@@ -115,7 +119,7 @@
     const trimmed = text.trim();
     if (!/^[\[{]/.test(trimmed)) return null;
     const obj = tryJSON(trimmed);
-    return obj != null ? JSON.stringify(obj, null, 2) : null;
+    return obj != null ? JSON.stringify(obj, null, INDENT) : null;
   };
   const prettyJsonFragments = (text) => {
     if (!text || text.length > CFG.LIMIT.MAX_JSON_SCAN) return null;
@@ -138,7 +142,7 @@
       const candidate = s.slice(i, j + 1);
       const obj = tryJSON(candidate);
       if (obj != null) {
-        const pretty = JSON.stringify(obj, null, 2);
+        const pretty = JSON.stringify(obj, null, INDENT);
         out = out.replace(/[ \t]+$/, '');
         out += '\n' + pretty;
         changed = true;
@@ -170,7 +174,7 @@
       const isDecl = /^<\?xml/.test(line);
       const isCmnt = /^<!--/.test(line) && /-->$/.test(line);
       if (isClose) indent = Math.max(indent - 1, 0);
-      out.push('  '.repeat(indent) + line);
+      out.push(INDENT.repeat(indent) + line);
       if (!isClose && !isSelf && !isDecl && !isCmnt && /^<[^!?][^>]*>$/.test(line)) indent++;
     }
     return out.join('\n');
