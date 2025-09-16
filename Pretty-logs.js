@@ -143,8 +143,9 @@
       const obj = tryJSON(candidate);
       if (obj != null) {
         const pretty = JSON.stringify(obj, null, INDENT);
-        out = out.replace(/[ \t]+$/, '');
-        out += '\n' + pretty;
+        out = out.replace(/\s+$/u, '');
+        if (!out.endsWith('\n')) out += '\n';
+        out += pretty;
         changed = true;
       } else {
         out += candidate;
@@ -153,6 +154,7 @@
     }
     return changed ? out : null;
   };
+
   const parseXmlSafe = (xmlStr) => {
     try {
       const doc = new DOMParser().parseFromString(xmlStr, 'text/xml');
@@ -408,7 +410,7 @@
     if (!rows.length) { err(TEXTS.no_fields); return; }
 
     const lines = rows
-      .map((r) => r.join(CFG.OUTPUT.COL_SEP).replace(/[ \t]+$/g, ''))
+      .map((r) => r.join(CFG.OUTPUT.COL_SEP).replace(/\s+$/gu, ''))
       .filter((line) => line.trim() !== '');
     let out = protectLeadingSpaces(lines.join('\n'));
     if (out.length > CFG.LIMIT.MAX_TOTAL_OUT) out = out.slice(0, CFG.LIMIT.MAX_TOTAL_OUT) + '\n…';
