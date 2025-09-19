@@ -65,26 +65,29 @@
   const createNotifier = (key) => {
     if (window[key]) return window[key];
     const box = document.createElement('div');
-    Object.assign(box.style, { position: 'fixed', bottom: '20px', right: '20px', zIndex: String(CFG.UI.Z), display: 'flex', flexDirection: 'column', gap: '8px' });
+    Object.assign(box.style, { position: 'fixed', bottom: '20px', right: '20px', zIndex: String(CFG.UI.Z), display: 'flex', flexDirection: 'column', gap: '8px', alignItems: 'flex-end', pointerEvents: 'none' });
     document.body.appendChild(box);
-    return (window[key] = { box, current: null, timer: null });
+    const reduceMotion = (() => { try { return window.matchMedia('(prefers-reduced-motion: reduce)').matches; } catch { return false; }})();
+    const transitionEnd = (el) => new Promise((res) => { let done = false; const finish = () => { if (!done) { done = true; el.removeEventListener('transitionend', onEnd); res(); } }; const onEnd = (e) => { if (e.target === el) finish(); }; el.addEventListener('transitionend', onEnd); setTimeout(finish, 500); });
+    const animIn = async (el) => { if (reduceMotion) { el.style.opacity = '1'; el.style.transform = 'none'; return; } el.style.willChange = 'opacity, transform'; el.style.opacity = '0'; el.style.transform = 'translateY(8px) scale(0.98)'; await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r))); el.style.transition = 'opacity 200ms ease, transform 200ms ease'; el.style.opacity = '1'; el.style.transform = 'translateY(0) scale(1)'; await transitionEnd(el); el.style.willChange = ''; el.style.transition = ''; };
+    const animOut = async (el) => { if (!el.isConnected) return; if (reduceMotion) { el.remove(); return; } el.style.willChange = 'opacity, transform'; el.style.transition = 'opacity 160ms ease, transform 160ms ease'; el.style.opacity = '0'; el.style.transform = 'translateY(-6px) scale(0.98)'; await transitionEnd(el); el.remove(); };
+    return (window[key] = { box, current: null, timer: null, reduceMotion, animIn, animOut });
   };
   const notif = createNotifier('__notif_prettylogs');
-  const notify = (text, type = 'info', ms = CFG.UI.DURATION) => {
+  const notify = async (text, type = 'info', ms = CFG.UI.DURATION) => {
     if (notif.timer) { clearTimeout(notif.timer); notif.timer = null; }
-    if (notif.current) { notif.current.remove(); notif.current = null; }
+    if (notif.current) { const prev = notif.current; notif.current = null; await notif.animOut(prev); }
     const d = document.createElement('div');
     d.setAttribute('role', 'status');
     d.setAttribute('aria-live', 'polite');
     d.textContent = text;
-    Object.assign(d.style, {
-      padding: '10px 15px', borderRadius: '8px', background: CFG.UI.COLORS[type] || CFG.UI.COLORS.info,
-      color: 'white', fontFamily: 'system-ui, sans-serif', fontSize: '14px', minWidth: '160px', textAlign: 'center',
-      boxShadow: '0 2px 6px rgba(0,0,0,0.2)', userSelect: 'none', cursor: 'pointer',
-    });
-    d.addEventListener('click', () => { if (notif.timer) clearTimeout(notif.timer); d.remove(); notif.current = null; notif.timer = null; });
-    notif.box.appendChild(d); notif.current = d;
-    notif.timer = setTimeout(() => { if (notif.current === d) { d.remove(); notif.current = null; } notif.timer = null; }, Math.max(300, ms | 0));
+    Object.assign(d.style, { pointerEvents: 'auto', padding: '10px 15px', borderRadius: '8px', background: CFG.UI.COLORS[type] || CFG.UI.COLORS.info, color: 'white', fontFamily: 'system-ui, sans-serif', fontSize: '14px', minWidth: '180px', textAlign: 'center', boxShadow: '0 8px 24px rgba(0,0,0,0.18)', userSelect: 'none', cursor: 'pointer' });
+    d.addEventListener('click', async () => { if (notif.timer) { clearTimeout(notif.timer); notif.timer = null; } if (notif.current === d) notif.current = null; await notif.animOut(d); });
+    notif.box.appendChild(d);
+    notif.current = d;
+    await notif.animIn(d);
+    const hideAfter = Math.max(300, ms | 0);
+    notif.timer = setTimeout(async () => { if (notif.current === d) notif.current = null; await notif.animOut(d); notif.timer = null; }, hideAfter);
   };
   const ok = (m) => notify(m, 'success');
   const err = (m) => notify(m, 'error');
@@ -220,21 +223,32 @@
 
   // ---------- Progress chip ----------
   const showProgress = () => {
-    if (state.progress) state.progress.remove?.();
-    const box = document.createElement('div');
-    Object.assign(box.style, {
-      position: 'fixed', bottom: '20px', right: '20px', padding: '6px 10px',
-      borderRadius: '8px', background: CFG.UI.COLORS.info, color: 'white',
-      fontFamily: 'system-ui, sans-serif', fontSize: '14px', zIndex: String(CFG.UI.Z),
-      display: 'flex', alignItems: 'center', gap: '8px',
-    });
+    const reduceMotion = (() => { try { return window.matchMedia('(prefers-reduced-motion: reduce)').matches; } catch { return false; }})();
+    const transitionEnd = (el) => new Promise((res) => { let done = false; const finish = () => { if (!done) { done = true; el.removeEventListener('transitionend', onEnd); res(); } }; const onEnd = (e) => { if (e.target === el) finish(); }; el.addEventListener('transitionend', onEnd); setTimeout(finish, 500); });
+    const animIn = async (el) => { if (reduceMotion) { el.style.opacity = '1'; el.style.transform = 'none'; return; } el.style.willChange = 'opacity, transform'; el.style.opacity = '0'; el.style.transform = 'translateY(8px) scale(0.98)'; await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r))); el.style.transition = 'opacity 200ms ease, transform 200ms ease'; el.style.opacity = '1'; el.style.transform = 'translateY(0) scale(1)'; await transitionEnd(el); el.style.willChange = ''; el.style.transition = ''; };
+    const animOut = async (el) => { if (!el.isConnected) return; if (reduceMotion) { el.remove(); return; } el.style.willChange = 'opacity, transform'; el.style.transition = 'opacity 160ms ease, transform 160ms ease'; el.style.opacity = '0'; el.style.transform = 'translateY(6px) scale(0.98)'; await transitionEnd(el); el.remove(); };
+    const chip = document.createElement('div');
+    Object.assign(chip.style, { position: 'fixed', bottom: '20px', right: '20px', padding: '6px 10px', borderRadius: '8px', background: CFG.UI.COLORS.info, color: 'white', fontFamily: 'system-ui, sans-serif', fontSize: '14px', zIndex: String(CFG.UI.Z), display: 'flex', alignItems: 'center', gap: '8px', boxShadow: '0 8px 24px rgba(0,0,0,0.18)', transformOrigin: 'right bottom' });
     const textEl = document.createElement('div'); textEl.textContent = rowsWord(0);
     const btn = document.createElement('button'); btn.textContent = '×';
-    Object.assign(btn.style, { fontSize: '12px', cursor: 'pointer', border: 'none', borderRadius: '4px', padding: '0 6px', background: 'white', color: CFG.UI.COLORS.info });
-    box.appendChild(textEl); box.appendChild(btn); document.body.appendChild(box);
+    Object.assign(btn.style, { fontSize: '12px', cursor: 'pointer', border: 'none', borderRadius: '4px', padding: '0 6px', background: 'white', color: CFG.UI.COLORS.info, lineHeight: '20px' });
+    chip.appendChild(textEl); chip.appendChild(btn); document.body.appendChild(chip);
+    animIn(chip);
+    let currentVal = 0; let rafId = null;
+    const easeOutCubic = (t) => 1 - Math.pow(1 - t, 3);
+    const setCountImmediate = (v) => { currentVal = v; textEl.textContent = rowsWord(v); };
+    const tweenTo = (target, dur = 280) => {
+      if (reduceMotion) { setCountImmediate(target); return; }
+      const start = currentVal; const delta = target - start; if (delta === 0) return;
+      if (rafId) { cancelAnimationFrame(rafId); rafId = null; }
+      const t0 = performance.now();
+      const step = (now) => { const t = Math.min(1, (now - t0) / dur); const val = Math.round(start + delta * easeOutCubic(t)); textEl.textContent = rowsWord(val); if (t < 1) { rafId = requestAnimationFrame(step); } else { currentVal = target; rafId = null; } };
+      rafId = requestAnimationFrame(step);
+      if (!reduceMotion) { chip.style.transition = 'transform 160ms ease'; chip.style.transform = 'translateY(0) scale(1.03)'; requestAnimationFrame(() => { requestAnimationFrame(() => { chip.style.transform = 'translateY(0) scale(1)'; }); }); }
+    };
     const api = {
-      update(v) { textEl.textContent = rowsWord(v); },
-      remove() { box.remove(); state.progress = null; },
+      update(v) { const n = Math.min(v | 0, CFG.LIMIT.MAX_ROWS); tweenTo(n); },
+      remove() { if (rafId) { cancelAnimationFrame(rafId); rafId = null; } animOut(chip); state.progress = null; },
       onStop(h) { btn.addEventListener('click', h, { once: true }); },
     };
     state.progress = api; return api;
