@@ -254,7 +254,7 @@
     if (uniq.length === 0) { err(TEXTS.notFoundTraces); return; }
     let payload = uniq;
     if (uniq.length > CFG.LIMIT) payload = uniq.slice(0, CFG.LIMIT);
-    const value = '(' + payload.map((t) => JSON.stringify(t)).join(' ') + ')';
+    const value = '(' + payload.map((t) => JSON.stringify(t)).join(' ') + ') AND NOT ("Идeнт" "Идeнт" "Идeнт")';
     const input = getQueryInputEl();
     if (input) {
       const current = 'value' in input ? String(input.value) : '';
