@@ -437,7 +437,8 @@
     const lines = rows
       .map((r) => r.join(CFG.OUTPUT.COL_SEP).replace(/\s+$/gu, ''))
       .filter((line) => line.trim() !== '');
-    let out = protectLeadingSpaces(lines.join('\n'));
+    
+    let out = protectLeadingSpaces(lines.join('\n\n'));
     if (out.length > CFG.LIMIT.MAX_TOTAL_OUT) out = out.slice(0, CFG.LIMIT.MAX_TOTAL_OUT) + '\n…';
     if (CFG.OUTPUT.WRAP_MARKDOWN) out = '```\n' + out + '\n```';
 
