@@ -11,9 +11,8 @@
     stop: false,
   });
 
-  // ---------- NBSP-based indentation ----------
-  const NBSP   = '\u00A0';
-  const INDENT = NBSP + NBSP;
+  // ---------- SPACE-based indentation (2 spaces) ----------
+  const INDENT = '  '; // два обычных пробела
 
   const CFG = {
     LIMIT: {
@@ -110,6 +109,26 @@
   // ---------- Columns ----------
   const WANTED = ['Time', 'message.message', 'message.exception', 'Payload'];
   const WANTED_NORM = WANTED.map(norm);
+
+  // ---------- Time rounding (to 3 decimals) ----------
+  const roundTimeMs = (s) => {
+    if (!s) return s;
+    return s.replace(/(\d{2}:\d{2}:\d{2})(\.(\d+))?/, (match, hms, dotPart, frac) => {
+      if (!frac) return match;
+      if (frac.length <= 3) return hms + '.' + frac;
+
+      const original = frac;
+      const num = Number('0.' + frac);
+      if (!Number.isFinite(num)) return match;
+
+      let rounded = Math.round(num * 1000) / 1000;
+      if (rounded >= 1) return hms + '.' + original.slice(0, 3);
+
+      let fracStr = String(rounded).split('.')[1] || '';
+      if (fracStr.length < 3) fracStr = (fracStr + '000').slice(0, 3);
+      return hms + '.' + fracStr;
+    });
+  };
 
   // ---------- JSON/XML prettify ----------
   const tryJSON = (s) => { try { return JSON.parse(s); } catch { return null; } };
@@ -209,6 +228,12 @@
   };
   const prettyValue = (raw, colName) => {
     let v = (raw ?? '').toString();
+
+    // Округляем время до 3 знаков после запятой в колонке Time
+    if (norm(colName) === 'time') {
+      v = roundTimeMs(v);
+    }
+
     if (norm(colName) === 'message.exception') v = (v.split(/\r?\n/)[0] || '').trim();
     if (isEmptyToken(v)) return '';
     const wholeJ = prettyWholeJson(v); if (wholeJ !== null) return wholeJ.trim();
