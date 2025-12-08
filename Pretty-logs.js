@@ -1,6 +1,6 @@
 (async () => {
   // =========================================================
-  // Pretty-logs v2  •  unified style
+  // Pretty-logs v2  •  unified style (no numeric value changes)
   // =========================================================
 
   const NS = 'Pretty-logs v2';
@@ -53,10 +53,10 @@
   const TEXTS = {
     no_fields: 'Таблица не найдена',
     copy_fail: 'Не удалось скопировать',
-    copy_ok:     (n) => `Логи выделены, ${copiedPhrase(n)}`,
+    copy_ok: (n) => `Логи выделены, ${copiedPhrase(n)}`,
     not_selected_all: (n) => `Логи не выделены, ${copiedPhrase(n)}`,
     scroll_stopped_rows: (n) => `Скролл остановлен, ${copiedPhrase(n)}`,
-    scroll_limit_rows:   (n) => `Достигнут лимит, ${copiedPhrase(n)}`,
+    scroll_limit_rows: (n) => `Достигнут лимит, ${copiedPhrase(n)}`,
     oops: 'Что-то пошло не так',
   };
 
@@ -64,42 +64,111 @@
   const createNotifier = (key) => {
     if (window[key]) return window[key];
     const box = document.createElement('div');
-    Object.assign(box.style, { position: 'fixed', bottom: '20px', right: '20px', zIndex: String(CFG.UI.Z), display: 'flex', flexDirection: 'column', gap: '8px' });
+    Object.assign(box.style, {
+      position: 'fixed',
+      bottom: '20px',
+      right: '20px',
+      zIndex: String(CFG.UI.Z),
+      display: 'flex',
+      flexDirection: 'column',
+      gap: '8px',
+    });
     document.body.appendChild(box);
     return (window[key] = { box, current: null, timer: null });
   };
   const notif = createNotifier('__notif_prettylogs');
   const notify = (text, type = 'info', ms = CFG.UI.DURATION) => {
-    if (notif.timer) { clearTimeout(notif.timer); notif.timer = null; }
-    if (notif.current) { notif.current.remove(); notif.current = null; }
+    if (notif.timer) {
+      clearTimeout(notif.timer);
+      notif.timer = null;
+    }
+    if (notif.current) {
+      notif.current.remove();
+      notif.current = null;
+    }
     const d = document.createElement('div');
     d.setAttribute('role', 'status');
     d.setAttribute('aria-live', 'polite');
     d.textContent = text;
     Object.assign(d.style, {
-      padding: '10px 15px', borderRadius: '8px', background: CFG.UI.COLORS[type] || CFG.UI.COLORS.info,
-      color: 'white', fontFamily: 'system-ui, sans-serif', fontSize: '14px', minWidth: '160px', textAlign: 'center',
-      boxShadow: '0 2px 6px rgba(0,0,0,0.2)', userSelect: 'none', cursor: 'pointer',
+      padding: '10px 15px',
+      borderRadius: '8px',
+      background: CFG.UI.COLORS[type] || CFG.UI.COLORS.info,
+      color: 'white',
+      fontFamily: 'system-ui, sans-serif',
+      fontSize: '14px',
+      minWidth: '160px',
+      textAlign: 'center',
+      boxShadow: '0 2px 6px rgba(0,0,0,0.2)',
+      userSelect: 'none',
+      cursor: 'pointer',
     });
-    d.addEventListener('click', () => { if (notif.timer) clearTimeout(notif.timer); d.remove(); notif.current = null; notif.timer = null; });
-    notif.box.appendChild(d); notif.current = d;
-    notif.timer = setTimeout(() => { if (notif.current === d) { d.remove(); notif.current = null; } notif.timer = null; }, Math.max(300, ms | 0));
+    d.addEventListener('click', () => {
+      if (notif.timer) clearTimeout(notif.timer);
+      d.remove();
+      notif.current = null;
+      notif.timer = null;
+    });
+    notif.box.appendChild(d);
+    notif.current = d;
+    notif.timer = setTimeout(() => {
+      if (notif.current === d) {
+        d.remove();
+        notif.current = null;
+      }
+      notif.timer = null;
+    }, Math.max(300, ms | 0));
   };
   const ok = (m) => notify(m, 'success');
   const err = (m) => notify(m, 'error');
 
   // ---------- Utils ----------
-  const sleep = (ms) => new Promise((r) => { const t = setTimeout(() => { state.timers.delete(t); r(); }, ms); state.timers.add(t); });
-  const clearAllTimers = () => { for (const t of state.timers) clearTimeout(t); state.timers.clear(); };
+  const sleep = (ms) =>
+    new Promise((r) => {
+      const t = setTimeout(() => {
+        state.timers.delete(t);
+        r();
+      }, ms);
+      state.timers.add(t);
+    });
+  const clearAllTimers = () => {
+    for (const t of state.timers) clearTimeout(t);
+    state.timers.clear();
+  };
   const norm = (s) => (s ?? '').trim().replace(/\s+/g, ' ').toLowerCase();
-  const parseIntSafe = (t) => { if (!t) return 0; const n = parseInt(String(t).replace(/[^0-9]/g, ''), 10); return Number.isFinite(n) ? n : 0; };
+  const parseIntSafe = (t) => {
+    if (!t) return 0;
+    const n = parseInt(String(t).replace(/[^0-9]/g, ''), 10);
+    return Number.isFinite(n) ? n : 0;
+  };
   const isEmptyToken = (v) => {
     const t = (v ?? '').toString().trim().toLowerCase();
-    return !t || t === '-' || t === '—' || t === '–' || t === 'n/a' || t === 'null' || t === 'undefined' || t === 'none';
+    return (
+      !t ||
+      t === '-' ||
+      t === '—' ||
+      t === '–' ||
+      t === 'n/a' ||
+      t === 'null' ||
+      t === 'undefined' ||
+      t === 'none'
+    );
   };
   const protectLeadingSpaces = (s) => (CFG.OUTPUT.HARD_INDENT ? s : s);
-  const qs = (sel, root = document) => { try { return root.querySelector(sel); } catch { return null; } };
-  const pickOne = (cands, root = document) => { for (const s of (cands || [])) { const el = qs(s, root); if (el) return el; } return null; };
+  const qs = (sel, root = document) => {
+    try {
+      return root.querySelector(sel);
+    } catch {
+      return null;
+    }
+  };
+  const pickOne = (cands, root = document) => {
+    for (const s of cands || []) {
+      const el = qs(s, root);
+      if (el) return el;
+    }
+    return null;
+  };
   const scrollTop0 = () => {
     const s = pickOne(CFG.SELECTORS.scrollable);
     if (s) s.scrollTop = 0;
@@ -130,42 +199,150 @@
     });
   };
 
-  // ---------- JSON/XML prettify ----------
-  const tryJSON = (s) => { try { return JSON.parse(s); } catch { return null; } };
+  // ---------- JSON helpers ----------
+  const tryJSON = (s) => {
+    try {
+      return JSON.parse(s);
+    } catch {
+      return null;
+    }
+  };
+
+  // ---------- Pretty JSON (без изменения чисел) ----------
+  const formatJsonPreserveNumbers = (text) => {
+    if (!text) return null;
+    let s = text.trim();
+
+    // Проверяем, что JSON валидный
+    try {
+      JSON.parse(s);
+    } catch {
+      return null;
+    }
+
+    let out = '';
+    let indent = 0;
+    let inStr = false;
+    let esc = false;
+
+    const pushIndent = () => {
+      out += '\n' + INDENT.repeat(Math.max(indent, 0));
+    };
+
+    for (let i = 0; i < s.length; i++) {
+      const ch = s[i];
+
+      if (inStr) {
+        out += ch;
+        if (esc) {
+          esc = false;
+        } else if (ch === '\\') {
+          esc = true;
+        } else if (ch === '"') {
+          inStr = false;
+        }
+        continue;
+      }
+
+      if (ch === '"') {
+        inStr = true;
+        out += ch;
+        continue;
+      }
+
+      // Вне строк – только структурное форматирование
+      switch (ch) {
+        case '{':
+        case '[':
+          out += ch;
+          indent++;
+          pushIndent();
+          break;
+        case '}':
+        case ']':
+          indent--;
+          pushIndent();
+          out += ch;
+          break;
+        case ',':
+          out += ch;
+          pushIndent();
+          break;
+        case ':':
+          out += ': ';
+          break;
+        default:
+          if (/\s/.test(ch)) {
+            // игнорируем пробелы и переводы строк вне строк
+          } else {
+            // любые токены (включая числа) копируем как есть
+            out += ch;
+          }
+      }
+    }
+
+    return out.trim();
+  };
+
   const prettyWholeJson = (text) => {
     if (!text) return null;
     if (text.length > CFG.LIMIT.MAX_FIELD_CHARS) return null;
     const trimmed = text.trim();
     if (!/^[\[{]/.test(trimmed)) return null;
-    const obj = tryJSON(trimmed);
-    return obj != null ? JSON.stringify(obj, null, INDENT) : null;
+    if (tryJSON(trimmed) == null) return null;
+    return formatJsonPreserveNumbers(trimmed);
   };
+
   const prettyJsonFragments = (text) => {
     if (!text || text.length > CFG.LIMIT.MAX_JSON_SCAN) return null;
-    let s = text, out = '', i = 0, changed = false;
+    let s = text,
+      out = '',
+      i = 0,
+      changed = false;
     while (i < s.length) {
       const ch = s[i];
-      if (ch !== '{' && ch !== '[') { out += ch; i++; continue; }
-      const open = ch, close = open === '{' ? '}' : ']';
-      let depth = 0, j = i, inStr = false, esc = false;
+      if (ch !== '{' && ch !== '[') {
+        out += ch;
+        i++;
+        continue;
+      }
+      const open = ch,
+        close = open === '{' ? '}' : ']';
+      let depth = 0,
+        j = i,
+        inStr = false,
+        esc = false;
       for (; j < s.length; j++) {
         const c = s[j];
-        if (inStr) { if (esc) esc = false; else if (c === '\\') esc = true; else if (c === '"') inStr = false; }
-        else {
+        if (inStr) {
+          if (esc) esc = false;
+          else if (c === '\\') esc = true;
+          else if (c === '"') inStr = false;
+        } else {
           if (c === '"') inStr = true;
           else if (c === open) depth++;
-          else if (c === close) { depth--; if (depth === 0) break; }
+          else if (c === close) {
+            depth--;
+            if (depth === 0) break;
+          }
         }
       }
-      if (depth !== 0) { out += s[i++]; continue; }
+      if (depth !== 0) {
+        out += s[i++];
+        continue;
+      }
       const candidate = s.slice(i, j + 1);
       const obj = tryJSON(candidate);
       if (obj != null) {
-        const pretty = JSON.stringify(obj, null, INDENT);
-        out = out.replace(/\s+$/u, '');
-        if (!out.endsWith('\n')) out += '\n';
-        out += pretty;
-        changed = true;
+        const pretty = formatJsonPreserveNumbers(candidate);
+        if (pretty != null) {
+          out = out.replace(/\s+$/u, '');
+          if (!out.endsWith('\n')) out += '\n';
+          out += pretty;
+          changed = true;
+        } else {
+          out += candidate;
+        }
       } else {
         out += candidate;
       }
@@ -174,12 +351,15 @@
     return changed ? out : null;
   };
 
+  // ---------- XML helpers ----------
   const parseXmlSafe = (xmlStr) => {
     try {
       const doc = new DOMParser().parseFromString(xmlStr, 'text/xml');
       if (doc.getElementsByTagName('parsererror')[0]) return null;
       return new XMLSerializer().serializeToString(doc);
-    } catch { return null; }
+    } catch {
+      return null;
+    }
   };
   const indentXml = (xmlStr) => {
     let s = xmlStr
@@ -187,8 +367,12 @@
       .replace(/(>)(<)(\/*)/g, '$1\n$2$3')
       .replace(/(\?>)(<)/g, '$1\n$2')
       .replace(/(--\>)(<)/g, '$1\n$2');
-    const lines = s.split('\n').map((l) => l.trim()).filter(Boolean);
-    let indent = 0; const out = [];
+    const lines = s
+      .split('\n')
+      .map((l) => l.trim())
+      .filter(Boolean);
+    let indent = 0;
+    const out = [];
     for (const line of lines) {
       const isClose = /^<\/[^>]+>/.test(line);
       const isSelf = /\/>$/.test(line) || /^<[^>]+\/>$/.test(line);
@@ -196,7 +380,14 @@
       const isCmnt = /^<!--/.test(line) && /-->$/.test(line);
       if (isClose) indent = Math.max(indent - 1, 0);
       out.push(INDENT.repeat(indent) + line);
-      if (!isClose && !isSelf && !isDecl && !isCmnt && /^<[^!?][^>]*>$/.test(line)) indent++;
+      if (
+        !isClose &&
+        !isSelf &&
+        !isDecl &&
+        !isCmnt &&
+        /^<[^!?][^>]*>$/.test(line)
+      )
+        indent++;
     }
     return out.join('\n');
   };
@@ -226,6 +417,7 @@
     }
     return null;
   };
+
   const prettyValue = (raw, colName) => {
     let v = (raw ?? '').toString();
 
@@ -234,12 +426,17 @@
       v = roundTimeMs(v);
     }
 
-    if (norm(colName) === 'message.exception') v = (v.split(/\r?\n/)[0] || '').trim();
+    if (norm(colName) === 'message.exception')
+      v = (v.split(/\r?\n/)[0] || '').trim();
     if (isEmptyToken(v)) return '';
-    const wholeJ = prettyWholeJson(v); if (wholeJ !== null) return wholeJ.trim();
-    const fragJ = prettyJsonFragments(v); if (fragJ !== null) return fragJ.trim();
-    const wholeX = prettyXmlWhole(v); if (wholeX !== null) return wholeX.trim();
-    const embX = prettyXmlEmbedded(v); if (embX !== null) return embX.trim();
+    const wholeJ = prettyWholeJson(v);
+    if (wholeJ !== null) return wholeJ.trim();
+    const fragJ = prettyJsonFragments(v);
+    if (fragJ !== null) return fragJ.trim();
+    const wholeX = prettyXmlWhole(v);
+    if (wholeX !== null) return wholeX.trim();
+    const embX = prettyXmlEmbedded(v);
+    if (embX !== null) return embX.trim();
     return v.trim();
   };
 
@@ -248,21 +445,50 @@
     if (state.progress) state.progress.remove?.();
     const box = document.createElement('div');
     Object.assign(box.style, {
-      position: 'fixed', bottom: '20px', right: '20px', padding: '6px 10px',
-      borderRadius: '8px', background: CFG.UI.COLORS.info, color: 'white',
-      fontFamily: 'system-ui, sans-serif', fontSize: '14px', zIndex: String(CFG.UI.Z),
-      display: 'flex', alignItems: 'center', gap: '8px',
+      position: 'fixed',
+      bottom: '20px',
+      right: '20px',
+      padding: '6px 10px',
+      borderRadius: '8px',
+      background: CFG.UI.COLORS.info,
+      color: 'white',
+      fontFamily: 'system-ui, sans-serif',
+      fontSize: '14px',
+      zIndex: String(CFG.UI.Z),
+      display: 'flex',
+      alignItems: 'center',
+      gap: '8px',
     });
-    const textEl = document.createElement('div'); textEl.textContent = rowsWord(0);
-    const btn = document.createElement('button'); btn.textContent = '×';
-    Object.assign(btn.style, { fontSize: '12px', cursor: 'pointer', border: 'none', borderRadius: '4px', padding: '0 6px', background: 'white', color: CFG.UI.COLORS.info });
-    box.appendChild(textEl); box.appendChild(btn); document.body.appendChild(box);
+    const textEl = document.createElement('div');
+    textEl.textContent = rowsWord(0);
+    const btn = document.createElement('button');
+    btn.textContent = '×';
+    Object.assign(btn.style, {
+      fontSize: '12px',
+      cursor: 'pointer',
+      border: 'none',
+      borderRadius: '4px',
+      padding: '0 6px',
+      background: 'white',
+      color: CFG.UI.COLORS.info,
+    });
+    box.appendChild(textEl);
+    box.appendChild(btn);
+    document.body.appendChild(box);
     const api = {
-      update(v) { textEl.textContent = rowsWord(v); },
-      remove() { box.remove(); state.progress = null; },
-      onStop(h) { btn.addEventListener('click', h, { once: true }); },
+      update(v) {
+        textEl.textContent = rowsWord(v);
+      },
+      remove() {
+        box.remove();
+        state.progress = null;
+      },
+      onStop(h) {
+        btn.addEventListener('click', h, { once: true });
+      },
     };
-    state.progress = api; return api;
+    state.progress = api;
+    return api;
   };
 
   // ---------- Table helpers ----------
@@ -291,14 +517,18 @@
         return tbl || el;
       }
     }
-    const any = Array.from(document.querySelectorAll('table')).find((t) => t && t.offsetParent !== null);
+    const any = Array.from(document.querySelectorAll('table')).find(
+      (t) => t && t.offsetParent !== null,
+    );
     return any || null;
   };
 
   const getAllRows = (table) => {
     const rows = Array.from(table.querySelectorAll('tbody tr'));
     if (rows.length) return rows;
-    return Array.from(table.querySelectorAll('tr')).filter((tr) => !tr.closest('thead'));
+    return Array.from(table.querySelectorAll('tr')).filter(
+      (tr) => !tr.closest('thead'),
+    );
   };
 
   const getCells = (tr) => Array.from(tr.querySelectorAll('td'));
@@ -311,15 +541,20 @@
     const hardTarget = Math.min(
       totalTarget || Infinity,
       CFG.SCROLL_LIMIT_ROWS,
-      CFG.LIMIT.MAX_ROWS
+      CFG.LIMIT.MAX_ROWS,
     );
 
     const prog = showProgress();
     state.stop = false;
     let reason = 'target';
-    prog.onStop(() => { state.stop = true; reason = 'manual'; prog.remove(); });
+    prog.onStop(() => {
+      state.stop = true;
+      reason = 'manual';
+      prog.remove();
+    });
 
-    let lastRowCount = -1, stable = 0;
+    let lastRowCount = -1,
+      stable = 0;
     state.didScrollDown = true;
 
     for (let i = 0; i < 600; i++) {
@@ -331,18 +566,35 @@
       prog.update(rc);
 
       if (rc >= hardTarget) {
-        reason = (hardTarget === CFG.SCROLL_LIMIT_ROWS) ? 'scroll_limit' : 'target';
-        prog.remove(); break;
+        reason =
+          hardTarget === CFG.SCROLL_LIMIT_ROWS ? 'scroll_limit' : 'target';
+        prog.remove();
+        break;
       }
-      if (rc >= CFG.LIMIT.MAX_ROWS) { reason = 'max_rows'; prog.remove(); break; }
+      if (rc >= CFG.LIMIT.MAX_ROWS) {
+        reason = 'max_rows';
+        prog.remove();
+        break;
+      }
 
-      if (rc !== lastRowCount) { lastRowCount = rc; stable = 0; } else { stable++; }
-      if (stable >= 10) { reason = 'stable'; prog.remove(); break; }
+      if (rc !== lastRowCount) {
+        lastRowCount = rc;
+        stable = 0;
+      } else {
+        stable++;
+      }
+      if (stable >= 10) {
+        reason = 'stable';
+        prog.remove();
+        break;
+      }
 
       await sleep(100);
     }
 
-    try { prog.remove(); } catch {}
+    try {
+      prog.remove();
+    } catch {}
     scrollTop0();
 
     return { used: true, reason };
@@ -351,45 +603,69 @@
   // ---------- Copy helper ----------
   const copy = async (text) => {
     try {
-      if (navigator.clipboard && window.isSecureContext) { await navigator.clipboard.writeText(text); return true; }
+      if (navigator.clipboard && window.isSecureContext) {
+        await navigator.clipboard.writeText(text);
+        return true;
+      }
       const ta = document.createElement('textarea');
-      ta.value = text; ta.style.position = 'fixed'; ta.style.top = '-1000px';
-      document.body.appendChild(ta); ta.focus(); ta.select();
-      const ok = document.execCommand('copy'); document.body.removeChild(ta);
+      ta.value = text;
+      ta.style.position = 'fixed';
+      ta.style.top = '-1000px';
+      document.body.appendChild(ta);
+      ta.focus();
+      ta.select();
+      const ok = document.execCommand('copy');
+      document.body.removeChild(ta);
       return ok;
-    } catch { return false; }
+    } catch {
+      return false;
+    }
   };
 
   // ---------- Main ----------
   try {
     const selection = window.getSelection?.();
-    const hasSelection = !!(selection && selection.rangeCount && selection.toString().trim());
+    const hasSelection =
+      !!(selection && selection.rangeCount && selection.toString().trim());
 
     let table = null;
     if (hasSelection) {
       const range = selection.getRangeAt(0);
-      const common = range.commonAncestorContainer.nodeType === 1
-        ? range.commonAncestorContainer
-        : range.commonAncestorContainer.parentElement;
+      const common =
+        range.commonAncestorContainer.nodeType === 1
+          ? range.commonAncestorContainer
+          : range.commonAncestorContainer.parentElement;
       table = common?.closest?.('table') || null;
       if (!table) {
-        const allRowsGlob = Array.from(document.querySelectorAll('tbody tr, tr'));
-        const rowsInSel = allRowsGlob.filter((tr) => selection.containsNode(tr, true));
+        const allRowsGlob = Array.from(
+          document.querySelectorAll('tbody tr, tr'),
+        );
+        const rowsInSel = allRowsGlob.filter((tr) =>
+          selection.containsNode(tr, true),
+        );
         if (rowsInSel.length) {
           const counts = new Map();
           rowsInSel.forEach((tr) => {
             const t = tr.closest('table');
             if (t) counts.set(t, (counts.get(t) || 0) + 1);
           });
-          table = Array.from(counts.entries()).sort((a, b) => b[1] - a[1])[0]?.[0] || null;
+          table =
+            Array.from(counts.entries()).sort((a, b) => b[1] - a[1])[0]?.[0] ||
+            null;
         }
       }
     }
     if (!table) table = getMainTable();
-    if (!table) { err(TEXTS.no_fields); return; }
+    if (!table) {
+      err(TEXTS.no_fields);
+      return;
+    }
 
     const idxMap = getTableMap(table);
-    if (!idxMap) { err(TEXTS.no_fields); return; }
+    if (!idxMap) {
+      err(TEXTS.no_fields);
+      return;
+    }
 
     let scrollInfo = { used: false, reason: 'none' };
     let totalCount = 0;
@@ -397,7 +673,10 @@
       const countEl = pickOne(CFG.SELECTORS.count);
       totalCount = parseIntSafe(countEl?.textContent);
       if (totalCount && totalCount > 50) {
-        scrollInfo = await collectWithScroll(table, Math.min(totalCount, CFG.LIMIT.MAX_ROWS));
+        scrollInfo = await collectWithScroll(
+          table,
+          Math.min(totalCount, CFG.LIMIT.MAX_ROWS),
+        );
       }
     }
 
@@ -406,7 +685,13 @@
     const rows = [];
     let truncatedByGlobalLimit = false;
 
-    for (let i = 0; i < allRows.length && rows.length < ROWS_LIMIT && rows.length < CFG.LIMIT.MAX_ROWS; i++) {
+    for (
+      let i = 0;
+      i < allRows.length &&
+      rows.length < ROWS_LIMIT &&
+      rows.length < CFG.LIMIT.MAX_ROWS;
+      i++
+    ) {
       const row = allRows[i];
 
       if (row.closest('thead')) continue;
@@ -420,26 +705,34 @@
         const colIdx = idxMap.get(wantedName);
         if (colIdx == null) continue;
         const raw = cells[colIdx]?.innerText ?? '';
-        const val = prettyValue(String(raw).slice(0, CFG.LIMIT.MAX_FIELD_CHARS), wantedName);
+        const val = prettyValue(
+          String(raw).slice(0, CFG.LIMIT.MAX_FIELD_CHARS),
+          wantedName,
+        );
         if (!isEmptyToken(val)) vals.push(val);
       }
       if (vals.length) rows.push(vals);
     }
 
     if (!hasSelection) {
-      truncatedByGlobalLimit = allRows.length > rows.length && rows.length >= ROWS_LIMIT;
+      truncatedByGlobalLimit =
+        allRows.length > rows.length && rows.length >= ROWS_LIMIT;
     } else {
       truncatedByGlobalLimit = rows.length >= ROWS_LIMIT;
     }
 
-    if (!rows.length) { err(TEXTS.no_fields); return; }
+    if (!rows.length) {
+      err(TEXTS.no_fields);
+      return;
+    }
 
     const lines = rows
       .map((r) => r.join(CFG.OUTPUT.COL_SEP).replace(/\s+$/gu, ''))
       .filter((line) => line.trim() !== '');
-    
+
     let out = protectLeadingSpaces(lines.join('\n\n'));
-    if (out.length > CFG.LIMIT.MAX_TOTAL_OUT) out = out.slice(0, CFG.LIMIT.MAX_TOTAL_OUT) + '\n…';
+    if (out.length > CFG.LIMIT.MAX_TOTAL_OUT)
+      out = out.slice(0, CFG.LIMIT.MAX_TOTAL_OUT) + '\n…';
     if (CFG.OUTPUT.WRAP_MARKDOWN) out = '```\n' + out + '\n```';
 
     const copied = await copy(out);
@@ -451,7 +744,12 @@
         ok(TEXTS.copy_ok(rows.length));
       } else if (scrollInfo.reason === 'manual') {
         ok(TEXTS.scroll_stopped_rows(rows.length));
-      } else if (truncatedByGlobalLimit || hitWindowLimit || hitHardMax || scrollInfo.reason === 'scroll_limit') {
+      } else if (
+        truncatedByGlobalLimit ||
+        hitWindowLimit ||
+        hitHardMax ||
+        scrollInfo.reason === 'scroll_limit'
+      ) {
         ok(TEXTS.scroll_limit_rows(rows.length));
       } else {
         ok(TEXTS.not_selected_all(rows.length));
