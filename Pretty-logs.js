@@ -11,8 +11,7 @@
     stop: false,
   });
 
-  // ---------- SPACE-based indentation (2 spaces) ----------
-  const INDENT = '  '; // два обычных пробела
+  const INDENT = ', '; // два обычных пробела
 
   const CFG = {
     LIMIT: {
