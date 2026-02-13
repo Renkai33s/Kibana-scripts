@@ -11,7 +11,8 @@
     stop: false,
   });
 
-  const INDENT = '  '; // два обычных пробела
+  const JSON_INDENT = '  '; // отступ внутри JSON/XML
+  const COLUMN_SEPARATOR = ', '; // разделитель между столбцами
 
   const CFG = {
     LIMIT: {
@@ -23,7 +24,7 @@
     SCROLL_LIMIT_ROWS: 200,
     OUTPUT: {
       HARD_INDENT: true,
-      COL_SEP: INDENT,
+      COL_SEP: COLUMN_SEPARATOR,
       WRAP_MARKDOWN: false,
     },
     UI: {
@@ -227,7 +228,7 @@
     let esc = false;
 
     const pushIndent = () => {
-      out += '\n' + INDENT.repeat(Math.max(indent, 0));
+      out += '\n' + JSON_INDENT.repeat(Math.max(indent, 0));
     };
 
     for (let i = 0; i < s.length; i++) {
@@ -387,7 +388,7 @@
       const isDecl = /^<\?xml/.test(line);
       const isCmnt = /^<!--/.test(line) && /-->$/.test(line);
       if (isClose) indent = Math.max(indent - 1, 0);
-      out.push(INDENT.repeat(indent) + line);
+      out.push(JSON_INDENT.repeat(indent) + line);
       if (
         !isClose &&
         !isSelf &&
