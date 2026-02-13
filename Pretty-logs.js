@@ -212,6 +212,8 @@
   const formatJsonPreserveNumbers = (text) => {
     if (!text) return null;
     let s = text.trim();
+    // 👉 не разворачиваем пустые JSON-объекты/массивы
+    if (s === '{}' || s === '[]') return s;
 
     // Проверяем, что JSON валидный
     try {
@@ -336,9 +338,16 @@
       if (obj != null) {
         const pretty = formatJsonPreserveNumbers(candidate);
         if (pretty != null) {
-          out = out.replace(/\s+$/u, '');
-          if (!out.endsWith('\n')) out += '\n';
-          out += pretty;
+      
+          // 👉 если JSON пустой — вставляем inline без переносов
+          if (pretty === '{}' || pretty === '[]') {
+            out += pretty;
+          } else {
+            out = out.replace(/\s+$/u, '');
+            if (!out.endsWith('\n')) out += '\n';
+            out += pretty;
+          }
+      
           changed = true;
         } else {
           out += candidate;
