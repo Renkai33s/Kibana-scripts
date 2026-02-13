@@ -11,7 +11,7 @@
     stop: false,
   });
 
-  const INDENT = ', '; // два обычных пробела
+  const INDENT = '  '; // два обычных пробела
 
   const CFG = {
     LIMIT: {
