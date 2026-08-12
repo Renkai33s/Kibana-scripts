@@ -310,168 +310,172 @@
   };
 
   // ---------- Pretty JSON (без изменения чисел) ----------
-  const formatJsonPreserveNumbers = (text) => {
-    if (!text) return null;
+const formatJsonPreserveNumbers = (text) => {
+  if (!text) return null;
 
-    const s = text.trim();
+  const s = text.trim();
 
-    // Не разворачиваем пустые JSON-объекты/массивы
-    if (s === '{}' || s === '[]') return s;
+  // Не разворачиваем пустые JSON-объекты/массивы
+  if (s === '{}' || s === '[]') return s;
 
-    // Проверяем, что JSON валидный
-    try {
-      JSON.parse(s);
-    } catch {
-      return null;
+  // Проверяем, что JSON валидный
+  try {
+    JSON.parse(s);
+  } catch {
+    return null;
+  }
+
+  // Декодируем Unicode escape-последовательности
+  // только внутри JSON-строк.
+  const decodeUnicodeEscapesInString = (str) => {
+    if (!/\\u[0-9a-fA-F]{4}/.test(str)) {
+      return str;
     }
 
-    /*
-     * Декодируем только Unicode escape-последовательности
-     * внутри JSON-строк.
-     *
-     * Например:
-     *
-     * \u0421\u0435\u0440\u044c\u0433\u0438
-     *
-     * превращается в:
-     *
-     * Серьги
-     *
-     * При этом остальные escape-последовательности:
-     *
-     * \n
-     * \t
-     * \\
-     * \"
-     *
-     * не изменяются.
-     *
-     * Это важно, потому что мы не хотим менять исходное
-     * содержимое JSON.
-     */
-    const decodeUnicodeEscapesInString = (str) => {
-      if (!/\\u[0-9a-fA-F]{4}/.test(str)) {
-        return str;
-      }
-
-      return str.replace(
-        /\\u([0-9a-fA-F]{4})/g,
-        (_, hex) =>
-          String.fromCharCode(parseInt(hex, 16))
-      );
-    };
-
-    let out = '';
-    let indent = 0;
-
-    let inStr = false;
-    let esc = false;
-
-    // Буфер текущей JSON-строки
-    let strBuffer = '';
-
-    const pushIndent = () => {
-      out +=
-        '\n' +
-        JSON_INDENT.repeat(Math.max(indent, 0));
-    };
-
-    for (let i = 0; i < s.length; i++) {
-      const ch = s[i];
-
-      // ---------- JSON string ----------
-      if (inStr) {
-        if (esc) {
-          /*
-           * Предыдущий символ был "\".
-           *
-           * Сохраняем escape-последовательность как есть:
-           * \n, \t, \\, \", \uXXXX и т.д.
-           *
-           * Само декодирование \uXXXX произойдёт при
-           * закрытии строки.
-           */
-          strBuffer += ch;
-          esc = false;
-        } else if (ch === '\\') {
-          strBuffer += ch;
-          esc = true;
-        } else if (ch === '"') {
-          // Закрываем JSON-строку
-          out += decodeUnicodeEscapesInString(
-            strBuffer
-          );
-
-          out += '"';
-
-          strBuffer = '';
-          inStr = false;
-        } else {
-          strBuffer += ch;
-        }
-
-        continue;
-      }
-
-      // ---------- Начало JSON string ----------
-      if (ch === '"') {
-        inStr = true;
-        out += '"';
-        continue;
-      }
-
-      // ---------- JSON structure ----------
-      switch (ch) {
-        case '{':
-        case '[':
-          out += ch;
-          indent++;
-          pushIndent();
-          break;
-
-        case '}':
-        case ']':
-          indent--;
-          pushIndent();
-          out += ch;
-          break;
-
-        case ',':
-          out += ch;
-          pushIndent();
-          break;
-
-        case ':':
-          out += ': ';
-          break;
-
-        default:
-          if (/\s/.test(ch)) {
-            // Игнорируем пробелы и переводы строк
-            // вне JSON-строк
-          } else {
-            /*
-             * Любые токены, включая числа,
-             * копируем как есть.
-             *
-             * Например:
-             * 40793.00
-             * 11
-             * true
-             * false
-             */
-            out += ch;
-          }
-      }
-    }
-
-    // Защита на случай неожиданного состояния
-    if (inStr) {
-      out += strBuffer;
-    }
-
-    return out.trim();
+    return str.replace(
+      /\\u([0-9a-fA-F]{4})/g,
+      (_, hex) =>
+        String.fromCharCode(parseInt(hex, 16))
+    );
   };
+
+  let out = '';
+  let indent = 0;
+
+  let inStr = false;
+  let esc = false;
+
+  let strBuffer = '';
+
+  const pushIndent = () => {
+    out +=
+      '\n' +
+      JSON_INDENT.repeat(Math.max(indent, 0));
+  };
+
+  /*
+   * Проверяем, является ли позиция началом пустого
+   * объекта или массива.
+   *
+   * Например:
+   *
+   * {}
+   * []
+   *
+   * Тогда они добавляются целиком без переноса строки.
+   */
+  const getEmptyContainerEnd = (start) => {
+    if (s[start] !== '{' && s[start] !== '[') {
+      return -1;
+    }
+
+    const open = s[start];
+    const close = open === '{' ? '}' : ']';
+
+    // После { или [ сразу должен идти соответствующий
+    // закрывающий символ, без содержимого.
+    if (s[start + 1] === close) {
+      return start + 1;
+    }
+
+    return -1;
+  };
+
+  for (let i = 0; i < s.length; i++) {
+    const ch = s[i];
+
+    // ---------- JSON string ----------
+    if (inStr) {
+      if (esc) {
+        strBuffer += ch;
+        esc = false;
+      } else if (ch === '\\') {
+        strBuffer += ch;
+        esc = true;
+      } else if (ch === '"') {
+        out += decodeUnicodeEscapesInString(
+          strBuffer
+        );
+
+        out += '"';
+
+        strBuffer = '';
+        inStr = false;
+      } else {
+        strBuffer += ch;
+      }
+
+      continue;
+    }
+
+    // ---------- Начало JSON string ----------
+    if (ch === '"') {
+      inStr = true;
+      out += '"';
+      continue;
+    }
+
+    // ---------- Пустой объект / массив ----------
+    if (ch === '{' || ch === '[') {
+      const emptyEnd =
+        getEmptyContainerEnd(i);
+
+      if (emptyEnd !== -1) {
+        out += ch + s[emptyEnd];
+
+        // Перескакиваем через закрывающий символ.
+        i = emptyEnd;
+
+        continue;
+      }
+
+      // Обычный непустой объект/массив
+      out += ch;
+      indent++;
+      pushIndent();
+
+      continue;
+    }
+
+    // ---------- Закрытие объекта / массива ----------
+    if (ch === '}' || ch === ']') {
+      indent--;
+      pushIndent();
+      out += ch;
+
+      continue;
+    }
+
+    // ---------- Остальная JSON-структура ----------
+    switch (ch) {
+      case ',':
+        out += ch;
+        pushIndent();
+        break;
+
+      case ':':
+        out += ': ';
+        break;
+
+      default:
+        if (/\s/.test(ch)) {
+          // Игнорируем пробелы и переводы строк
+          // вне JSON-строк.
+        } else {
+          // Числа, true, false, null и прочие токены
+          // копируем как есть.
+          out += ch;
+        }
+    }
+  }
+
+  // Защита на случай неожиданного состояния
+  if (inStr) {
+    out += strBuffer;
+  }
+
+  return out.trim();
+};
 
   const prettyWholeJson = (text) => {
     if (!text) return null;
