@@ -13,11 +13,11 @@
   });
 
   const CFG = {
-    LIMIT: 20,
+    LIMIT: 15,
     UI: {
       Z: 999999,
       COLORS: { success: '#52c41a', error: '#ff4d4f', warn: '#faad14', info: '#3498db' },
-      DURATION: 2000,
+      DURATION: 1500,
     },
     SELECTORS: {
       scrollable: ['.dscCanvas'],
